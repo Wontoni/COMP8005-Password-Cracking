@@ -79,6 +79,15 @@ class Controller:
                 print(f"Algorithm Options: {self.algorithm_options}")
                 print(f"Salt: {self.salt}")     
                 print(f"Password: {self.hashed_password}")
+
+                """
+                Parsed shadow file line:
+Hash Algorithm: y
+Algorithm Options: j9T
+Salt: Lln2/jq9Yr2SknQTRoeXv/
+Password: zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3
+abc:$y$j9T$Lln2/jq9Yr2SknQTRoeXv/$zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3:20474:0:99999:7:::
+                """
             return
         except Exception as e:
             print(e)
