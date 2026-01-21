@@ -4,10 +4,12 @@ import select
 import queue
 import struct
 import pickle
-
+import sys
 
 class Controller:
     def __init__(self):
+        self.check_args(sys.argv)
+        self.handle_args(sys.argv)
         self.connection = None
         self.server = None
         self.server_host = "::"
@@ -16,11 +18,76 @@ class Controller:
         self.outputs = []
         self.message_queues = {}
 
+        self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
+        self.parse_shadow_username(self.shadow_file_contents)
+        print(self.shadow_file_contents)
+
         self.start_server()
+
+    def check_args(self, args):
+        try:
+            if len(args) != 3:
+                raise Exception("Invalid number of arguments")
+
+        except Exception as e:
+            self.handle_error(e)
+            exit(1)
+
+    def handle_args(self, args):
+        try:
+            self.shadow_file = args[1]
+            self.username = args[2]
+        except Exception as e:
+            self.handle_error("Failed to retrieve inputted arguments.")
+
+
+    def check_shadow_file(self, shadow_file):
+        try:
+            with open(shadow_file, 'r') as f:
+                return self.read_shadow_file(f)
+        except Exception as e:
+            self.handle_error("Failed to open shadow file.")
+        
+    def read_shadow_file(self, shadow_file):
+        try:
+            lines = shadow_file.readlines()
+            for line in lines:
+                parts = line.strip().split(':')
+                print(line)
+                if parts[0] == self.username:
+                    return line
+            self.handle_error("Username not found in shadow file.")
+        except Exception as e:
+            self.handle_error("Failed to read shadow file.")
+
+    def parse_shadow_username(self, shadow_line):
+        try:
+            parts = shadow_line.strip().split(':')
+            self.hash_algorithm = parts[1].split('$')[1]
+            # MD5: $1$salt$hash
+            # bcrypt: $2b$cost$saltAndHash
+            # SHA-256: $5$salt$hash
+            # SHA-512: $6$salt$hash
+            # yescrypt: $y$options$salt$hash
+
+            if self.hash_algorithm == "y": # yescrypt
+                self.algorithm_options = parts[1].split('$')[2]
+                self.salt = parts[1].split('$')[3]
+                self.hashed_password = parts[1].split('$')[4]
+                print("Parsed shadow file line:")
+                print(f"Hash Algorithm: {self.hash_algorithm}")
+                print(f"Algorithm Options: {self.algorithm_options}")
+                print(f"Salt: {self.salt}")     
+                print(f"Password: {self.hashed_password}")
+            return
+        except Exception as e:
+            print(e)
+            self.handle_error("Failed to parse shadow file line for username.")
 
     def start_server(self):
         self.create_socket()
         self.listen_connections()
+        
         try:
             while True:
                 self.accept_connection()
@@ -41,7 +108,6 @@ class Controller:
                 
         except Exception as e:
             self.handle_error("Failed to create socket server")
-            exit(1)
             
     def listen_connections(self):
         try:
@@ -49,7 +115,6 @@ class Controller:
             print(f'Server is listening on port {self.server_port} for incoming connections...')
         except Exception as e:
             self.handle_error("Failed to listen to connections")
-            exit(1)
 
     def accept_connection(self):
         try:
@@ -105,7 +170,6 @@ class Controller:
                     del self.message_queues[s]
         except Exception as e:
             self.handle_error(e)
-            exit(1)
 
     @staticmethod
     def handle_data(data):
@@ -124,7 +188,7 @@ class Controller:
         exit(1)
 
 def main():
-    controller = Controller() # Args and arg handling here?
+    controller = Controller()
 
 if __name__ == "__main__":
     main()
