@@ -6,6 +6,7 @@ import struct
 import pickle
 import sys
 
+TESTING_LINE = "abc:$2b$05$5tWeu9RE4wiQ.RWTSDBebOaone9Wz2cILBmCN7zGI65CiRlMfCCdW:20474:0:99999:7:::"
 class Controller:
     def __init__(self):
         self.check_args(sys.argv)
@@ -20,7 +21,6 @@ class Controller:
 
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
         self.parse_shadow_username(self.shadow_file_contents)
-        print(self.shadow_file_contents)
 
         self.start_server()
 
@@ -49,15 +49,20 @@ class Controller:
             self.handle_error("Failed to open shadow file.")
         
     def read_shadow_file(self, shadow_file):
-        try:
-            lines = shadow_file.readlines()
-            for line in lines:
-                parts = line.strip().split(':')
-                if parts[0] == self.username:
-                    return line
-            self.handle_error("Username not found in shadow file.")
-        except Exception as e:
-            self.handle_error("Failed to read shadow file.")
+        if True: # TODO: CHANGE HERE FOR COMMAND LINE INPUTS
+
+            return TESTING_LINE
+        else:
+            try:
+                lines = shadow_file.readlines()
+                for line in lines:
+                    parts = line.strip().split(':')
+                    if parts[0] == self.username:
+                        print(f"Shadow file line:\n{line.strip()}")
+                        return line
+                self.handle_error("Username not found in shadow file.")
+            except Exception as e:
+                self.handle_error("Failed to read shadow file.")
 
     def parse_shadow_username(self, shadow_line):
         try:
@@ -70,15 +75,28 @@ class Controller:
             # yescrypt: $y$options$salt$hash
 
             if self.hash_algorithm == "y": # yescrypt
-                self.algorithm_options = parts[1].split('$')[2]
-                self.salt = parts[1].split('$')[3]
+                self.salt = f"${parts[1].split('$')[2]}${parts[1].split('$')[3]}$" # $options$salt$
                 self.hashed_password = parts[1].split('$')[4]
                 print("Parsed shadow file line:")
                 print(f"Hash Algorithm: {self.hash_algorithm}")
-                print(f"Algorithm Options: {self.algorithm_options}")
                 print(f"Salt: {self.salt}")     
                 print(f"Password: {self.hashed_password}")
-
+            if self.hash_algorithm in ["1", "5", "6"]: # MD5, SHA-256, SHA-512
+                self.salt = f"${parts[1].split('$')[2]}$" # $salt$
+                self.hashed_password = parts[1].split('$')[3]
+                print("Parsed shadow file line:")
+                print(f"Hash Algorithm: {self.hash_algorithm}")
+                print(f"Salt: {self.salt}")     
+                print(f"Password: {self.hashed_password}")
+            elif self.hash_algorithm == "2b": # bcrypt
+                self.rounds = parts[1].split('$')[2]
+                self.salt = parts[1].split('$')[3][:22] # Salt is combined with hashed password (first 22 characters)
+                self.hashed_password = parts[1].split('$')[3][22:] # Remaining is hashed password
+                print("Parsed shadow file line:")
+                print(f"Hash Algorithm: {self.hash_algorithm}")
+                print(f"Salt: {self.salt}")     
+                print(f"Rounds: {self.rounds}")
+                print(f"Password: {self.hashed_password}")
             return
         except Exception as e:
             print(e)
@@ -180,9 +198,9 @@ class Controller:
     def handle_data(self):
         data = {
             'hash_algorithm': self.hash_algorithm,
-            'algorithm_options': self.algorithm_options,
             'salt': self.salt,
-            'hashed_password': self.hashed_password
+            'hashed_password': self.hashed_password,
+            'rounds': getattr(self, 'rounds', None)
         }
         response = pickle.dumps(data)
         return response

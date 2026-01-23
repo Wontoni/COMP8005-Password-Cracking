@@ -1,14 +1,25 @@
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import socket
 import sys
 import ipaddress
 import pickle
 import hashlib
 import bcrypt
-from passlib.hash import yescrypt
+import crypt # Deprecated, but used for yescrypt
+import string
+import itertools
 
+# TODO: MD5, SHA-256, SHA-512 
 
 class Worker:
+    LEGAL_CHARACTERS = (string.ascii_lowercase +
+                        string.ascii_uppercase +
+                        string.digits +
+                        "@#%^&*()_+-=.,:;?")
     def __init__(self):
+
         # Variables to change based on server host location
         self.ipv4 = "10.0.0.34"
         self.ipv6 = "2604:3d08:597e:ef00:a21d:8635:3d84:d9d1"
@@ -28,6 +39,8 @@ class Worker:
         self.create_socket()
         self.connect_client()
         self.receive_response()
+
+        self.crack_password(self.hashed_password, self.salt, self.algoritihm, self.rounds)
 
     def check_args(self, args):
         try:
@@ -102,12 +115,53 @@ class Worker:
     def handle_error(self, err_message):
         print(f"Error: {err_message}")
         self.cleanup(False)
-        
+
     def display_message(self, message):
         print(f'Received response\n{message}')
-        print(type(message))
+        self.algoritihm = message.get('hash_algorithm')
+        self.salt = message.get('salt')
+        self.hashed_password = message.get('hashed_password')
+        self.rounds = message.get('rounds')
 
-        self.cleanup(True)
+    @staticmethod
+    def crack_password(hashed_password, salt, algorithm, rounds=None):
+        if algorithm in ["y", "1", "5", "6"]:  # yescrypt, MD5, SHA-256, SHA-512
+            return Worker.crack_yescrypt(algorithm, hashed_password, salt)
+        elif algorithm == "2b":  # bcrypt
+            if rounds is None:
+                raise Exception("Rounds parameter is required for bcrypt")
+            return Worker.crack_bcrypt(hashed_password, salt, rounds)
+        else:
+            raise Exception("Unsupported hash algorithm")
+    
+    @staticmethod
+    def crack_yescrypt(algorithm, hashed_password, salt):
+        # Brute Force method
+        salt = f"${algorithm}{salt}"
+        for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
+            password = ''.join(pwd)
+            hashed = crypt.crypt(password, salt)
+            if hashed == f"{salt}{hashed_password}":
+                print(f"Password found: {password}")
+                return password
+        print("Password not found.")
+        
+    @staticmethod
+    def crack_bcrypt(hashed_password, salt, rounds):
+        # Brute Force method
+        for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
+            password = ''.join(pwd)
+            if password == 'abc':
+                hashed = bcrypt.hashpw(password.encode(), f"$2b${rounds}${salt}".encode())
+                print("RAWWW")
+                print(hashed.decode())
+                print(f"$2b${rounds}${salt}${hashed_password}")
+                if hashed.decode() == f"$2b${rounds}${salt}${hashed_password}":
+                    print(f"Password found: {password}")
+                    return password
+                print("Password not found")
+                exit(1)
+        print("Password not found.")
 
     def cleanup(self, success):
         if self.client:
