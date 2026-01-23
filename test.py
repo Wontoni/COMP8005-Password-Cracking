@@ -45,3 +45,7 @@ print(hashed.decode())
 
 #$2b$05$5tWeu9RE4wiQ.RWTSDBebO
 #$2b$05$5tWeu9RE4wiQ.RWTSDBebO
+"""
+$2b$05$5tWeu9RE4wiQ.RWTSDBebOaone9Wz2cILBmCN7zGI65CiRlMfCCdW
+$2b$05$5tWeu9RE4wiQ.RWTSDBebO$aone9Wz2cILBmCN7zGI65CiRlMfCCdW
+"""
