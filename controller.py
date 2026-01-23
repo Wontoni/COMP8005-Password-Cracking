@@ -80,14 +80,7 @@ class Controller:
                 print(f"Salt: {self.salt}")     
                 print(f"Password: {self.hashed_password}")
 
-                """
-                Parsed shadow file line:
-Hash Algorithm: y
-Algorithm Options: j9T
-Salt: Lln2/jq9Yr2SknQTRoeXv/
-Password: zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3
-abc:$y$j9T$Lln2/jq9Yr2SknQTRoeXv/$zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3:20474:0:99999:7:::
-                """
+
             return
         except Exception as e:
             print(e)
@@ -166,7 +159,7 @@ abc:$y$j9T$Lln2/jq9Yr2SknQTRoeXv/$zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3:20
                     except queue.Empty:
                         self.outputs.remove(s)
                     else:
-                        next_msg = self.handle_data(message_data)
+                        next_msg = self.handle_data()
                         s.sendall(struct.pack(">I", len(next_msg)))
                         s.sendall(next_msg)
                 
@@ -180,8 +173,13 @@ abc:$y$j9T$Lln2/jq9Yr2SknQTRoeXv/$zgbwvbmDVB4g4hwGgitHl8ooPZZkFY0fOlYVpTyQnz3:20
         except Exception as e:
             self.handle_error(e)
 
-    @staticmethod
-    def handle_data(data):
+    def handle_data(self):
+        data = {
+            'hash_algorithm': self.hash_algorithm,
+            'algorithm_options': self.algorithm_options,
+            'salt': self.salt,
+            'hashed_password': self.hashed_password
+        }
         response = pickle.dumps(data)
         return response
 
