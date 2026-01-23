@@ -53,7 +53,6 @@ class Controller:
             lines = shadow_file.readlines()
             for line in lines:
                 parts = line.strip().split(':')
-                print(line)
                 if parts[0] == self.username:
                     return line
             self.handle_error("Username not found in shadow file.")
@@ -79,7 +78,6 @@ class Controller:
                 print(f"Algorithm Options: {self.algorithm_options}")
                 print(f"Salt: {self.salt}")     
                 print(f"Password: {self.hashed_password}")
-
 
             return
         except Exception as e:
@@ -131,16 +129,23 @@ class Controller:
                         self.inputs.append(self.connection)
 
                         self.message_queues[self.connection] = queue.Queue()
-                    else:
-                        data_size = struct.unpack(">I", s.recv(4))[0]
-                        receieved_data = b""
-                        remaining_data_size = data_size
 
-                        if data_size:
-                            while remaining_data_size != 0:
-                                receieved_data += s.recv(remaining_data_size)
-                                remaining_data_size = data_size - len(receieved_data)
-                            data = pickle.loads(receieved_data)
+                        try:
+                            next_msg = self.handle_data()
+                            self.connection.sendall(next_msg)
+                            print('Sent initial response to', client_addr)
+                        except Exception as e:
+                            print(f"Warning: failed to send initial response: {e}")
+                    else:
+                        received = s.recv(1024)
+
+                        if received:
+                            try:
+                                data = pickle.loads(received)
+                            except Exception as e:
+                                self.handle_error(f"Failed to unpickle data: {e}")
+                                continue
+
                             self.inputs.remove(s)
                             self.message_queues[s].put(data)
                             if s not in self.outputs:
@@ -160,7 +165,6 @@ class Controller:
                         self.outputs.remove(s)
                     else:
                         next_msg = self.handle_data()
-                        s.sendall(struct.pack(">I", len(next_msg)))
                         s.sendall(next_msg)
                 
                 for s in exceptional:

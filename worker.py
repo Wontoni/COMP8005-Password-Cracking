@@ -1,9 +1,10 @@
 import socket
 import sys
 import ipaddress
-import struct
 import pickle
-
+import hashlib
+import bcrypt
+from passlib.hash import yescrypt
 
 
 class Worker:
@@ -14,7 +15,6 @@ class Worker:
 
         # Change to ipv4 for connection via IPv4 Address or ipv6 for IPv6
         self.server_port = 8080
-        self.message = ""
 
         self.server_host = None
         self.client = None
@@ -25,15 +25,13 @@ class Worker:
         self.check_args(sys.argv)
         self.handle_args(sys.argv)
 
-        if self.message:
-            self.create_socket()
-            self.connect_client()
-            self.send_message(self.message)
-            self.receive_response()
+        self.create_socket()
+        self.connect_client()
+        self.receive_response()
 
     def check_args(self, args):
         try:
-            if len(args) != 4:
+            if len(args) != 3:
                 raise Exception("Invalid number of arguments")
             self.is_ipv4(args[1]) # Will handle invalid addresses
         except Exception as e:
@@ -44,7 +42,6 @@ class Worker:
         try:
             self.server_host = args[1]
             self.server_port = int(args[2])
-            self.message = args[3]
         except Exception as e:
             self.handle_error("Failed to retrieve inputted arguments.")
 
@@ -67,10 +64,9 @@ class Worker:
             self.handle_error(f"Failed to connect to socket with the address and port - {self.server_host}:{self.server_port}")
             exit(1)
 
-    def send_message(self, words): 
+    def send_response(self, response): 
         try: 
-            encoded = pickle.dumps(words)
-            client.sendall(struct.pack(">I", len(encoded)))
+            encoded = pickle.dumps(response)
             client.sendall(encoded)
         except Exception as e:
             self.handle_error("Failed to send words")
@@ -78,15 +74,10 @@ class Worker:
 
     def receive_response(self):
         try: 
-            data_size = struct.unpack(">I", client.recv(4))[0]
-            # receive payload till received payload size is equal to data_size received
-            received_data = b""
-            remaining_size = data_size
-            while remaining_size != 0:
-                received_data += client.recv(remaining_size)
-                remaining_size = data_size - len(received_data)
+            received_data = client.recv(1024)
+            if not received_data:
+                raise Exception("No data received from server")
             decoded_response = pickle.loads(received_data)
-
             self.display_message(decoded_response)
         except Exception as e:
             self.handle_error("Failed to receive response")
@@ -114,12 +105,13 @@ class Worker:
         
     def display_message(self, message):
         print(f'Received response\n{message}')
+        print(type(message))
 
         self.cleanup(True)
 
     def cleanup(self, success):
-        if client:
-            client.close()
+        if self.client:
+            self.client.close()
         if success:
             exit(0)
         exit(1)
