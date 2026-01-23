@@ -10,9 +10,8 @@ ipv6 = "2604:3d08:597e:ef00:a21d:8635:3d84:d9d1"
 
 # Change to ipv4 for connection via IPv4 Address or ipv6 for IPv6
 server_port = 8080
+message = ""
 
-
-file_name = None
 server_host = None
 client = None
 
@@ -20,30 +19,28 @@ client = None
 def main():
     check_args(sys.argv)
     handle_args(sys.argv)
-    words = read_file()
 
-    if words:
+    if message:
         create_socket()
         connect_client()
-        send_message(words)
+        send_message(message)
         receieve_response()
 
 def check_args(args):
     try:
-        if len(args) != 3:
+        if len(args) != 4:
             raise Exception("Invalid number of arguments")
-        elif not args[1].endswith('.txt'):
-            raise Exception("Invalid file extension, please input a .txt file")
-        is_ipv4(args[2]) # Will handle invalid addresses
+        is_ipv4(args[1]) # Will handle invalid addresses
     except Exception as e:
         handle_error(e)
         exit(1)
 
 def handle_args(args):
-    global file_name, server_host
+    global server_port, server_host, message
     try:
-        file_name = sys.argv[1]
-        server_host = sys.argv[2]
+        server_host = sys.argv[1]
+        server_port = int(sys.argv[2])
+        message = sys.argv[3]
     except Exception as e:
         handle_error("Failed to retrieve inputted arguments.")
 
@@ -62,6 +59,7 @@ def connect_client():
         client.settimeout(10)
         client.connect((server_host, server_port))
     except Exception as e:
+        print(e)
         handle_error(f"Failed to connect to socket with the address and port - {server_host}:{server_port}")
         exit(1)
 
@@ -90,25 +88,6 @@ def receieve_response():
         handle_error("Failed to receive response")
         exit(1)
 
-def read_file():
-    try:
-        with open(file_name, 'r', errors="ignore") as file:
-            content = file.read()
-            if not content:
-                raise Exception("File is empty.")
-            formatted_data = replace_new_lines(content)
-            return formatted_data
-    except FileNotFoundError:
-        handle_error(f"File '{file_name}' not found.")
-    except Exception as e:
-        handle_error(e)
-
-def replace_new_lines(text_data):
-    try:
-        res = text_data.replace('\n', ' ')
-        return res
-    except Exception as e:
-        handle_error(e)
 
 def is_ipv4(ip_str):
     try:
@@ -131,6 +110,7 @@ def handle_error(err_message):
     
 def display_message(message):
     print(f'Received response\n{message}')
+
     cleanup(True)
 
 def cleanup(success):
