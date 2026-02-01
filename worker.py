@@ -9,7 +9,7 @@ import crypt # Deprecated, but used for yescrypt
 import string
 import itertools
 import argparse
-import time
+from datetime import datetime
 
 class Worker:
     LEGAL_CHARACTERS = (string.ascii_lowercase +
@@ -38,8 +38,11 @@ class Worker:
         self.create_socket()
         self.connect_client()
         self.receive_response()
-
-        self.crack_password(self.hashed_password, self.salt, self.algoritihm, self.rounds)
+        start_time = datetime.now()
+        cracked_password_result = self.crack_password(self.hashed_password, self.salt, self.algoritihm, self.rounds)
+        end_time = datetime.now()
+        self.crack_time = end_time - start_time
+        self.send_response(cracked_password_result)
 
     def create_args(self):
         parser = argparse.ArgumentParser(
@@ -66,7 +69,6 @@ class Worker:
             self.is_ipv4(self.args.controller) # Will handle invalid addresses
         except Exception as e:
             self.handle_error(e)
-            exit(1)
 
     def handle_args(self):
         try:
@@ -95,12 +97,19 @@ class Worker:
             self.handle_error(f"Failed to connect to socket with the address and port - {self.server_host}:{self.server_port}")
             exit(1)
 
-    def send_response(self, response): 
+    def send_response(self, password): 
         try: 
+            response = {
+                "password": password,
+                "crack_time": self.crack_time,
+                "dispatch_latency": self.dispatch_latency,
+                "sent_time": datetime.now()
+            }
             encoded = pickle.dumps(response)
             client.sendall(encoded)
         except Exception as e:
-            self.handle_error("Failed to send words")
+            print(e)
+            self.handle_error("Failed to send response")
 
     def receive_response(self):
         try: 
@@ -138,7 +147,7 @@ class Worker:
         self.salt = message.get('salt')
         self.hashed_password = message.get('hashed_password')
         self.rounds = message.get('rounds')
-        self.time_received = message.get('time_sent') - time.perf_counter()
+        self.dispatch_latency = message.get('time_sent') - datetime.now()
 
     @staticmethod
     def brute_force(max_length):
@@ -149,6 +158,7 @@ class Worker:
 
     @staticmethod
     def crack_password(hashed_password, salt, algorithm, rounds=None):
+
         if algorithm in ["y", "1", "5", "6"]:  # yescrypt, MD5, SHA-256, SHA-512
             return Worker.crack_general(algorithm, hashed_password, salt)
         elif algorithm == "2b":  # bcrypt
