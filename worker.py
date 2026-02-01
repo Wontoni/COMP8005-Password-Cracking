@@ -10,8 +10,7 @@ import bcrypt
 import crypt # Deprecated, but used for yescrypt
 import string
 import itertools
-
-# TODO: MD5, SHA-256, SHA-512 
+import argparse
 
 class Worker:
     LEGAL_CHARACTERS = (string.ascii_lowercase +
@@ -33,8 +32,9 @@ class Worker:
         self.run()
 
     def run(self):
-        self.check_args(sys.argv)
-        self.handle_args(sys.argv)
+        self.create_args()
+        self.check_args()
+        self.handle_args()
 
         self.create_socket()
         self.connect_client()
@@ -42,20 +42,39 @@ class Worker:
 
         self.crack_password(self.hashed_password, self.salt, self.algoritihm, self.rounds)
 
-    def check_args(self, args):
+    def create_args(self):
+        parser = argparse.ArgumentParser(
+            description="Worker Script"
+        )
+
+        parser.add_argument(
+            "-c", "--controller",
+            required=True,
+            help="IP Address of the controller"
+        )
+
+        parser.add_argument(
+            "-p", "--port",
+            type=int,
+            required=True,
+            help="Port number of the controller"
+        )
+
+        self.args = parser.parse_args()
+
+    def check_args(self):
         try:
-            if len(args) != 3:
-                raise Exception("Invalid number of arguments")
-            self.is_ipv4(args[1]) # Will handle invalid addresses
+            self.is_ipv4(self.args.controller) # Will handle invalid addresses
         except Exception as e:
             self.handle_error(e)
             exit(1)
 
-    def handle_args(self, args):
+    def handle_args(self):
         try:
-            self.server_host = args[1]
-            self.server_port = int(args[2])
+            self.server_host = self.args.controller
+            self.server_port = self.args.port
         except Exception as e:
+            print(e)
             self.handle_error("Failed to retrieve inputted arguments.")
 
     def create_socket(self):
@@ -123,6 +142,13 @@ class Worker:
         self.rounds = message.get('rounds')
 
     @staticmethod
+    def brute_force(max_length):
+        for length in range(1, max_length + 1):
+            for combo in itertools.product(Worker.LEGAL_CHARACTERS, repeat=length):
+                candidate = ''.join(combo)
+                yield candidate
+
+    @staticmethod
     def crack_password(hashed_password, salt, algorithm, rounds=None):
         if algorithm in ["y", "1", "5", "6"]:  # yescrypt, MD5, SHA-256, SHA-512
             return Worker.crack_general(algorithm, hashed_password, salt)
@@ -136,8 +162,7 @@ class Worker:
     @staticmethod
     def crack_general(algorithm, hashed_password, salt):
         salt = f"${algorithm}{salt}"
-        for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
-            password = ''.join(pwd)
+        for password in Worker.brute_force(255):
             hashed = crypt.crypt(password, salt)
             if hashed == f"{salt}{hashed_password}":
                 print(f"Password found: {password}")
@@ -146,8 +171,7 @@ class Worker:
         
     @staticmethod
     def crack_bcrypt(hashed_password, salt, rounds):
-        for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
-            password = ''.join(pwd)
+        for password in Worker.brute_force(255):
             hashed = bcrypt.hashpw(password.encode(), f"$2b${rounds}${salt}".encode())
             if hashed.decode() == f"$2b${rounds}${salt}{hashed_password}":
                 print(f"Password found: {password}")

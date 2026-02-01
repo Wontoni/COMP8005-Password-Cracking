@@ -5,16 +5,16 @@ import queue
 import struct
 import pickle
 import sys
+import argparse
 
 TESTING_LINE = "abc:$2b$05$ZTBACvxp23ohpSvBZJV5CumQ9farQ0A2ZfzqknF3uo08uyzQOl0Xe:20474:0:99999:7:::"
 class Controller:
     def __init__(self):
-        self.check_args(sys.argv)
-        self.handle_args(sys.argv)
+        self.create_args()
+        self.handle_args()
         self.connection = None
         self.server = None
         self.server_host = "::"
-        self.server_port = 8080
         self.inputs = []
         self.outputs = []
         self.message_queues = {}
@@ -24,19 +24,39 @@ class Controller:
 
         self.start_server()
 
-    def check_args(self, args):
-        try:
-            if len(args) != 3:
-                raise Exception("Invalid number of arguments")
+    def create_args(self):
+        parser = argparse.ArgumentParser(
+            description="Password Cracker Controller Script"
+        )
 
-        except Exception as e:
-            self.handle_error(e)
-            exit(1)
+        parser.add_argument(
+            "-f", "--file",
+            required=True,
+            help="Path to the shadow file"
+        )
 
-    def handle_args(self, args):
+        parser.add_argument(
+            "-u", "--user",
+            required=True,
+            help="Username of the password to crack"
+        )
+
+        parser.add_argument(
+            "-p", "--port",
+            type=int,
+            required=True,
+            help="Port number to host on"
+        )
+
+        self.args = parser.parse_args()
+
+    
+    def handle_args(self):
         try:
-            self.shadow_file = args[1]
-            self.username = args[2]
+            self.shadow_file = self.args.file
+            self.username = self.args.user
+            self.server_port = self.args.port
+
         except Exception as e:
             self.handle_error("Failed to retrieve inputted arguments.")
 
