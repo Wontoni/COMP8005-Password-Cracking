@@ -3,12 +3,25 @@ import select
 import queue
 import pickle
 import argparse
-import time
+from datetime import datetime
 
-TESTING_LINE = "abc:$2b$05$ZTBACvxp23ohpSvBZJV5CumQ9farQ0A2ZfzqknF3uo08uyzQOl0Xe:20474:0:99999:7:::"
+TESTING_LINE = "abc:$y$j9T$HjgMvmSW0Ii.IpKGM9JHq1$MQXJaa0/zzkxdG1NzeCt3U4QeGPQEtOkiTwnlU4J.z2:20474:0:99999:7:::"
 class Controller:
+    # MD5: $1$salt$hash
+    # bcrypt: $2b$cost$saltAndHash
+    # SHA-256: $5$salt$hash
+    # SHA-512: $6$salt$hash
+    # yescrypt: $y$options$salt$hash
+    ALGORITHMS = {
+        "1": "MD5",
+        "2b": "bcrypt",
+        "5": "SHA-256",
+        "6": "SHA-512",
+        "y": "yescrypt"
+    }
+
     def __init__(self):
-        start_time = time.perf_counter()
+        self.start_time = datetime.now()
         self.create_args()
         self.handle_args()
         self.connection = None
@@ -20,12 +33,18 @@ class Controller:
 
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
         self.parse_shadow_username(self.shadow_file_contents)
-        end_time = time.perf_counter
+        parse_time = datetime.now()
 
-        self.controller_parsing_time = start_time - end_time
+        self.controller_parsing_time = parse_time - self.start_time
         self.start_server()
 
     def create_args(self):
+        def positive_int(value):
+            ivalue = int(value)
+            if ivalue <= 0:
+                raise argparse.ArgumentTypeError(f"{value} is not a positive integer")
+            return ivalue
+        
         parser = argparse.ArgumentParser(
             description="Password Cracker Controller Script"
         )
@@ -44,14 +63,13 @@ class Controller:
 
         parser.add_argument(
             "-p", "--port",
-            type=int,
+            type=positive_int,
             required=True,
             help="Port number to host on"
         )
 
         self.args = parser.parse_args()
-
-    
+ 
     def handle_args(self):
         try:
             self.shadow_file = self.args.file
@@ -60,7 +78,6 @@ class Controller:
 
         except Exception as e:
             self.handle_error("Failed to retrieve inputted arguments.")
-
 
     def check_shadow_file(self, shadow_file):
         try:
@@ -98,26 +115,13 @@ class Controller:
             if self.hash_algorithm == "y": # yescrypt
                 self.salt = f"${parts[1].split('$')[2]}${parts[1].split('$')[3]}$" # $options$salt$
                 self.hashed_password = parts[1].split('$')[4]
-                print("Parsed shadow file line:")
-                print(f"Hash Algorithm: {self.hash_algorithm}")
-                print(f"Salt: {self.salt}")     
-                print(f"Password: {self.hashed_password}")
             if self.hash_algorithm in ["1", "5", "6"]: # MD5, SHA-256, SHA-512
                 self.salt = f"${parts[1].split('$')[2]}$" # $salt$
                 self.hashed_password = parts[1].split('$')[3]
-                print("Parsed shadow file line:")
-                print(f"Hash Algorithm: {self.hash_algorithm}")
-                print(f"Salt: {self.salt}")     
-                print(f"Password: {self.hashed_password}")
             elif self.hash_algorithm == "2b": # bcrypt
                 self.rounds = parts[1].split('$')[2]
                 self.salt = parts[1].split('$')[3][:22] # Salt is combined with hashed password (first 22 characters)
                 self.hashed_password = parts[1].split('$')[3][22:] # Remaining is hashed password
-                print("Parsed shadow file line:")
-                print(f"Hash Algorithm: {self.hash_algorithm}")
-                print(f"Salt: {self.salt}")     
-                print(f"Rounds: {self.rounds}")
-                print(f"Password: {self.hashed_password}")
             return
         except Exception as e:
             print(e)
@@ -143,9 +147,10 @@ class Controller:
                 self.server = socket.create_server(addr)
                 print("Server running on default mode.")
             self.inputs = [self.server]
-            self.server.setblocking(0)
+            self.server.setblocking(1) # CHANGE IN THE FUTURE
                 
         except Exception as e:
+            print(e)
             self.handle_error("Failed to create socket server")
             
     def listen_connections(self):
@@ -155,6 +160,40 @@ class Controller:
         except Exception as e:
             self.handle_error("Failed to listen to connections")
 
+    # Single Client
+    def accept_connection(self):
+        try:
+            self.connection, client_addr = self.server.accept()
+            print("Connection received:", client_addr)
+            self.connection.setblocking(True)
+
+            try:
+                outgoing = self.handle_data()
+                self.connection.sendall(outgoing)
+                print("Sent data to", client_addr)
+            except Exception as e:
+                self.handle_error(f"Failed to send data: {e}")
+                return
+
+            received = self.connection.recv(4096)
+
+            if not received:
+                print("Client closed connection")
+                return
+
+            try:
+                data = pickle.loads(received)
+                print("Received data from client:", data)
+            except Exception as e:
+                self.handle_error(f"Failed to unpickle data: {e}")
+
+            self.process_response(data)
+
+        except Exception as e:
+            self.handle_error(e)
+
+    # FUTURE USE, MULTIPLE CLIENTS
+    """
     def accept_connection(self):
         try:
             while self.inputs:
@@ -215,6 +254,7 @@ class Controller:
                     del self.message_queues[s]
         except Exception as e:
             self.handle_error(e)
+    """
 
     def handle_data(self):
         data = {
@@ -222,10 +262,23 @@ class Controller:
             'salt': self.salt,
             'hashed_password': self.hashed_password,
             'rounds': getattr(self, 'rounds', None),
-            'time_sent': time.perf_counter()
+            'time_sent': datetime.now()
         }
         response = pickle.dumps(data)
         return response
+
+    def process_response(self, data):
+        return_latency = datetime.now() - data["sent_time"]
+        end_runtime = datetime.now() - self.start_time
+        print("=============================================================")
+        print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
+        print(f"Password Found: {data["password"]}")
+        print(f"Controller Parsing Time: {self.controller_parsing_time.total_seconds()} seconds")
+        print(f"Dispatch Latency: {data["dispatch_latency"].total_seconds()} seconds")
+        print(f"Cracking Time: {data["crack_time"].total_seconds()} seconds")
+        print(f"Return Latency: {return_latency.total_seconds()} seconds")
+        print(f"Total end-to-end Runtime: {end_runtime.total_seconds()} seconds")
+        print("=============================================================")
 
     def handle_error(self, err_message):
         print(f"Error: {err_message}")
@@ -239,7 +292,7 @@ class Controller:
         exit(1)
 
 def main():
-    controller = Controller()
+    Controller()
 
 if __name__ == "__main__":
     main()
