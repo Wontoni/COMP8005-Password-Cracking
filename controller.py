@@ -6,7 +6,7 @@ import struct
 import pickle
 import sys
 
-TESTING_LINE = "abc:$2b$05$5tWeu9RE4wiQ.RWTSDBebOaone9Wz2cILBmCN7zGI65CiRlMfCCdW:20474:0:99999:7:::"
+TESTING_LINE = "abc:$2b$05$ZTBACvxp23ohpSvBZJV5CumQ9farQ0A2ZfzqknF3uo08uyzQOl0Xe:20474:0:99999:7:::"
 class Controller:
     def __init__(self):
         self.check_args(sys.argv)
@@ -210,7 +210,7 @@ class Controller:
         self.cleanup(False)
         
     def cleanup(self, success):
-        if self.server:
+        if hasattr(self, "server") and self.server: #self.server:
             self.server.close()
         if success:
             exit(0)

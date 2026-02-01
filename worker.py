@@ -96,7 +96,6 @@ class Worker:
             self.handle_error("Failed to receive response")
             exit(1)
 
-
     def is_ipv4(self, ip_str):
         try:
             ipaddress.IPv4Address(ip_str)
@@ -126,7 +125,7 @@ class Worker:
     @staticmethod
     def crack_password(hashed_password, salt, algorithm, rounds=None):
         if algorithm in ["y", "1", "5", "6"]:  # yescrypt, MD5, SHA-256, SHA-512
-            return Worker.crack_yescrypt(algorithm, hashed_password, salt)
+            return Worker.crack_general(algorithm, hashed_password, salt)
         elif algorithm == "2b":  # bcrypt
             if rounds is None:
                 raise Exception("Rounds parameter is required for bcrypt")
@@ -135,8 +134,7 @@ class Worker:
             raise Exception("Unsupported hash algorithm")
     
     @staticmethod
-    def crack_yescrypt(algorithm, hashed_password, salt):
-        # Brute Force method
+    def crack_general(algorithm, hashed_password, salt):
         salt = f"${algorithm}{salt}"
         for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
             password = ''.join(pwd)
@@ -148,19 +146,12 @@ class Worker:
         
     @staticmethod
     def crack_bcrypt(hashed_password, salt, rounds):
-        # Brute Force method
         for pwd in itertools.product(Worker.LEGAL_CHARACTERS, repeat=3):
             password = ''.join(pwd)
-            if password == 'abc':
-                hashed = bcrypt.hashpw(password.encode(), f"$2b${rounds}${salt}".encode())
-                print("RAWWW")
-                print(hashed.decode())
-                print(f"$2b${rounds}${salt}${hashed_password}")
-                if hashed.decode() == f"$2b${rounds}${salt}${hashed_password}":
-                    print(f"Password found: {password}")
-                    return password
-                print("Password not found")
-                exit(1)
+            hashed = bcrypt.hashpw(password.encode(), f"$2b${rounds}${salt}".encode())
+            if hashed.decode() == f"$2b${rounds}${salt}{hashed_password}":
+                print(f"Password found: {password}")
+                return password
         print("Password not found.")
 
     def cleanup(self, success):
