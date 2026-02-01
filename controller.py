@@ -1,15 +1,14 @@
 import socket
-import re
 import select
 import queue
-import struct
 import pickle
-import sys
 import argparse
+import time
 
 TESTING_LINE = "abc:$2b$05$ZTBACvxp23ohpSvBZJV5CumQ9farQ0A2ZfzqknF3uo08uyzQOl0Xe:20474:0:99999:7:::"
 class Controller:
     def __init__(self):
+        start_time = time.perf_counter()
         self.create_args()
         self.handle_args()
         self.connection = None
@@ -21,7 +20,9 @@ class Controller:
 
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
         self.parse_shadow_username(self.shadow_file_contents)
+        end_time = time.perf_counter
 
+        self.controller_parsing_time = start_time - end_time
         self.start_server()
 
     def create_args(self):
@@ -220,7 +221,8 @@ class Controller:
             'hash_algorithm': self.hash_algorithm,
             'salt': self.salt,
             'hashed_password': self.hashed_password,
-            'rounds': getattr(self, 'rounds', None)
+            'rounds': getattr(self, 'rounds', None),
+            'time_sent': time.perf_counter()
         }
         response = pickle.dumps(data)
         return response

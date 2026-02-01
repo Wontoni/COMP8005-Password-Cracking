@@ -2,15 +2,14 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import socket
-import sys
 import ipaddress
 import pickle
-import hashlib
 import bcrypt
 import crypt # Deprecated, but used for yescrypt
 import string
 import itertools
 import argparse
+import time
 
 class Worker:
     LEGAL_CHARACTERS = (string.ascii_lowercase +
@@ -102,7 +101,6 @@ class Worker:
             client.sendall(encoded)
         except Exception as e:
             self.handle_error("Failed to send words")
-            exit(1)
 
     def receive_response(self):
         try: 
@@ -112,8 +110,8 @@ class Worker:
             decoded_response = pickle.loads(received_data)
             self.display_message(decoded_response)
         except Exception as e:
+            print(e)
             self.handle_error("Failed to receive response")
-            exit(1)
 
     def is_ipv4(self, ip_str):
         try:
@@ -140,6 +138,7 @@ class Worker:
         self.salt = message.get('salt')
         self.hashed_password = message.get('hashed_password')
         self.rounds = message.get('rounds')
+        self.time_received = message.get('time_sent') - time.perf_counter()
 
     @staticmethod
     def brute_force(max_length):
