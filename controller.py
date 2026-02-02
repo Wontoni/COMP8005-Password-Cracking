@@ -5,7 +5,7 @@ import pickle
 import argparse
 from datetime import datetime
 
-TESTING_LINE = "abc:$y$j9T$HjgMvmSW0Ii.IpKGM9JHq1$MQXJaa0/zzkxdG1NzeCt3U4QeGPQEtOkiTwnlU4J.z2:20474:0:99999:7:::"
+TESTING_LINE = "abc:$y$j9T$SrYeIrf1zdVZjxx4PkOwZ0$VwSgwQybogSbFT8xZvzrSmMas5Rjo1aNvaWIepsjd51:20474:0:99999:7:::"
 class Controller:
     # MD5: $1$salt$hash
     # bcrypt: $2b$cost$saltAndHash
@@ -279,6 +279,12 @@ class Controller:
         print(f"Return Latency: {return_latency.total_seconds()} seconds")
         print(f"Total end-to-end Runtime: {end_runtime.total_seconds()} seconds")
         print("=============================================================")
+        
+        print(f"{self.controller_parsing_time.total_seconds()}")
+        print(f"{data["dispatch_latency"].total_seconds()}")
+        print(f"{data["crack_time"].total_seconds()}")
+        print(f"{return_latency.total_seconds()}")
+        print(f"{end_runtime.total_seconds()}")
 
     def handle_error(self, err_message):
         print(f"Error: {err_message}")

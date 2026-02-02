@@ -1,0 +1,76 @@
+digraph PasswordCrackerFSM {
+    rankdir=UD;
+    node [shape=ellipse];
+
+    START;
+    PARSE_ARGS;
+    HANDLE_ARGS;
+    USAGE;
+    INIT_SERVICE;
+    INIT_THREADS;
+    REGISTER_CONTROLLER;
+    WAIT_FOR_JOB;
+    ASSIGN_JOBS;
+    INIT_CRACKING;
+    ATTEMPT_CRACK;
+    CHECK_MATCH;
+    WORK_EXHAUSTED;
+    RECEIVE_HEARTBEAT;
+    SEND_HEARTBEAT;
+    SEND_SUCCESS;
+    SEND_FAILURE;
+    UPDATE_PROGRESS;
+    CLEANUP;
+    EXIT [shape=doublecircle];
+
+    START -> PARSE_ARGS [label="parse_arguments"];
+
+    PARSE_ARGS -> HANDLE_ARGS [label="handle_arguments"];
+    PARSE_ARGS -> USAGE [label="usage"];
+
+    HANDLE_ARGS -> INIT_SERVICE [label="init_service"];
+    HANDLE_ARGS -> USAGE [label="usage"];
+
+    USAGE -> CLEANUP [label="cleanup"];
+
+    INIT_SERVICE -> INIT_THREADS [label="register_controller"];
+    INIT_SERVICE -> USAGE [label="usage"];
+
+    INIT_THREADS -> REGISTER_CONTROLLER [label="register_controller"];
+    INIT_THREADS -> USAGE [label="usage"];
+
+    REGISTER_CONTROLLER -> WAIT_FOR_JOB [label="wait_job"];
+    REGISTER_CONTROLLER -> USAGE [label="usage"];
+
+    WAIT_FOR_JOB -> ASSIGN_JOBS [label="start_cracking"];
+    WAIT_FOR_JOB -> USAGE [label="usage"];
+
+    ASSIGN_JOBS -> INIT_CRACKING [label="start_cracking"];
+    ASSIGN_JOBS -> USAGE [label="usage"];
+
+    INIT_CRACKING -> ATTEMPT_CRACK [label="crack_password"];
+    INIT_CRACKING -> USAGE [label="usage"];
+
+    ATTEMPT_CRACK -> CHECK_MATCH [label="check_match"];
+    ATTEMPT_CRACK -> UPDATE_PROGRESS [label="update_progress"]
+    ATTEMPT_CRACK -> USAGE [label="usage"];
+
+    UPDATE_PROGRESS -> ATTEMPT_CRACK [label="crack_password"]
+    UPDATE_PROGRESS -> RECEIVE_HEARTBEAT [label="receive_heartbeat"]
+    UPDATE_PROGRESS -> USAGE [label="usage"]
+
+    RECEIVE_HEARTBEAT -> SEND_HEARTBEAT [label="send_heartbeat"]
+    
+
+    CHECK_MATCH -> SEND_SUCCESS [label="success"];
+    CHECK_MATCH -> ATTEMPT_CRACK [label="no match"];
+
+    ATTEMPT_CRACK -> WORK_EXHAUSTED [label="exhausted"];
+
+    WORK_EXHAUSTED -> SEND_FAILURE [label="failure"];
+
+    SEND_SUCCESS -> CLEANUP [label="cleanup"];
+    SEND_FAILURE -> CLEANUP [label="cleanup"];
+
+    CLEANUP -> EXIT;
+}

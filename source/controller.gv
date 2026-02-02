@@ -1,0 +1,58 @@
+digraph ControllerFSM {
+    rankdir=UD;
+    node [shape=ellipse];
+
+    START;
+    PARSE_ARGS;
+    HANDLE_ARGS;
+    USAGE;
+    READ_SHADOW;
+    INIT_LISTENER;
+    REGISTER_WORKER;
+    DISPATCH_JOB;
+    WAIT_FOR_RESULT;
+    RECEIVE_RESULTS;
+    REPORT_RESULTS;
+    CLEANUP;
+    SEND_HEARTBEAT;
+    RECEIVE_HEARTBEAT;
+    EXIT [shape=doublecircle];
+
+    START -> PARSE_ARGS [label="parse_arguments"];
+
+    PARSE_ARGS -> HANDLE_ARGS [label="handle_arguments"];
+    PARSE_ARGS -> USAGE [label="usage"];
+
+    HANDLE_ARGS -> READ_SHADOW [label="read_shadow"];
+    HANDLE_ARGS -> USAGE [label="usage"];
+
+    READ_SHADOW -> INIT_LISTENER [label="parse_shadow"];
+    READ_SHADOW -> USAGE [label="usage"];
+
+    INIT_LISTENER -> REGISTER_WORKER [label="wait_worker"];
+    INIT_LISTENER -> USAGE [label="usage"];
+
+    REGISTER_WORKER -> DISPATCH_JOB [label="dispatch_job"];
+    REGISTER_WORKER -> USAGE [label="usage"];
+
+    DISPATCH_JOB -> WAIT_FOR_RESULT [label="wait_result"];
+    DISPATCH_JOB -> USAGE [label="usage"];
+
+    WAIT_FOR_RESULT -> RECEIVE_RESULTS [label="receive_result"];
+    WAIT_FOR_RESULT -> USAGE [label="receive_result"];
+    WAIT_FOR_RESULT -> SEND_HEARTBEAT [label="send_heartbeat"]
+
+    SEND_HEARTBEAT -> RECEIVE_HEARTBEAT [lable="receive_heartbeat"]
+    SEND_HEARTBEAT -> USAGE [lable="usage"]
+
+    RECEIVE_HEARTBEAT -> WAIT_FOR_RESULT [lable="wait_result"]
+
+    RECEIVE_RESULTS -> REPORT_RESULTS [label="report_results"];
+    RECEIVE_RESULTS -> USAGE [label="usage"];
+
+    REPORT_RESULTS -> CLEANUP [lable="cleanup"]
+
+    USAGE -> CLEANUP [label="cleanup"];
+
+    CLEANUP -> EXIT;
+}
