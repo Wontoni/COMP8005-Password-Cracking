@@ -4,8 +4,8 @@ import queue
 import pickle
 import argparse
 from datetime import datetime
+import time
 
-TESTING_LINE = "abc:$y$j9T$SrYeIrf1zdVZjxx4PkOwZ0$VwSgwQybogSbFT8xZvzrSmMas5Rjo1aNvaWIepsjd51:20474:0:99999:7:::"
 class Controller:
     # MD5: $1$salt$hash
     # bcrypt: $2b$cost$saltAndHash
@@ -21,7 +21,6 @@ class Controller:
     }
 
     def __init__(self):
-        self.start_time = datetime.now()
         self.create_args()
         self.handle_args()
         self.connection = None
@@ -31,6 +30,7 @@ class Controller:
         self.outputs = []
         self.message_queues = {}
 
+        self.start_time = datetime.now()
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
         self.parse_shadow_username(self.shadow_file_contents)
         parse_time = datetime.now()
@@ -68,6 +68,13 @@ class Controller:
             help="Port number to host on"
         )
 
+        parser.add_argument(
+            "-b", "--heartbeat_seconds",
+            type=positive_int,
+            required=True,
+            help="Interval between heartbeat requests (seconds)"
+        )
+
         self.args = parser.parse_args()
  
     def handle_args(self):
@@ -75,6 +82,7 @@ class Controller:
             self.shadow_file = self.args.file
             self.username = self.args.user
             self.server_port = self.args.port
+            self.heartbeat_timeout = self.args.heartbeat_seconds # seconds
 
         except Exception as e:
             self.handle_error("Failed to retrieve inputted arguments.")
@@ -87,20 +95,16 @@ class Controller:
             self.handle_error("Failed to open shadow file.")
         
     def read_shadow_file(self, shadow_file):
-        if True: # TODO: CHANGE HERE FOR COMMAND LINE INPUTS
-
-            return TESTING_LINE
-        else:
-            try:
-                lines = shadow_file.readlines()
-                for line in lines:
-                    parts = line.strip().split(':')
-                    if parts[0] == self.username:
-                        print(f"Shadow file line:\n{line.strip()}")
-                        return line
-                self.handle_error("Username not found in shadow file.")
-            except Exception as e:
-                self.handle_error("Failed to read shadow file.")
+        try:
+            lines = shadow_file.readlines()
+            for line in lines:
+                parts = line.strip().split(':')
+                if parts[0] == self.username:
+                    print(f"Shadow file line:\n{line.strip()}")
+                    return line
+            self.handle_error("Username not found in shadow file.")
+        except Exception as e:
+            self.handle_error("Failed to read shadow file.")
 
     def parse_shadow_username(self, shadow_line):
         try:
@@ -133,8 +137,14 @@ class Controller:
         
         try:
             while True:
-                self.accept_connection()
+                self.accept_connection() # Accept connection then sends out the parsing information
+                while True:
+                    data = self.request_heartbeat()
+                    self.process_response(data)
+                    time.sleep(self.heartbeat_timeout)
+
         except Exception as e:
+            print(e)
             self.handle_error("Failed to receive data from client")
 
     def create_socket(self):
@@ -163,35 +173,17 @@ class Controller:
     # Single Client
     def accept_connection(self):
         try:
-            self.connection, client_addr = self.server.accept()
-            print("Connection received:", client_addr)
+            self.connection, self.client_addr = self.server.accept()
+            print("Connection received:", self.client_addr)
             self.connection.setblocking(True)
+            self.connection.settimeout(self.heartbeat_timeout)
 
-            try:
-                outgoing = self.handle_data()
-                self.connection.sendall(outgoing)
-                print("Sent data to", client_addr)
-            except Exception as e:
-                self.handle_error(f"Failed to send data: {e}")
-                return
-
-            received = self.connection.recv(4096)
-
-            if not received:
-                print("Client closed connection")
-                return
-
-            try:
-                data = pickle.loads(received)
-                print("Received data from client:", data)
-            except Exception as e:
-                self.handle_error(f"Failed to unpickle data: {e}")
-
-            self.process_response(data)
-
+            outgoing = self.handle_data()
+            self.connection.sendall(outgoing)
+            print("Sent data to", self.client_addr)
         except Exception as e:
+            print(e)
             self.handle_error(e)
-
     # FUTURE USE, MULTIPLE CLIENTS
     """
     def accept_connection(self):
@@ -255,9 +247,35 @@ class Controller:
         except Exception as e:
             self.handle_error(e)
     """
+    def receive_response(self):
+        try:
+            received = self.connection.recv(4096)
+            if not received:
+                raise socket.timeout
+        except socket.timeout:
+            print("[HEARTBEAT] Failed to receive heartbeat response, shutting down")
+            self.cleanup(False)
+            return None
+
+        try:
+            data = pickle.loads(received)
+            print("Received data from client:", data)
+            return data
+        except Exception as e:
+            self.handle_error(f"Failed to unpickle data: {e}")
+
+    def request_heartbeat(self):
+        outgoing = {"type": "heartbeat-request"}
+        response = pickle.dumps(outgoing)
+        self.connection.sendall(response)
+        print('Sent heartbeat request to', self.client_addr)
+
+        data = self.receive_response()
+        return data
 
     def handle_data(self):
         data = {
+            'type': "job",
             'hash_algorithm': self.hash_algorithm,
             'salt': self.salt,
             'hashed_password': self.hashed_password,
@@ -268,30 +286,44 @@ class Controller:
         return response
 
     def process_response(self, data):
+        if data["type"] == "password":
+            self.result_response(data)
+        elif data["type"] == "heartbeat":
+            self.heartbeat_response(data)
+        else:
+            print("RECEIVED UNKNOWN RESPONSE")
+            self.cleanup(False)
+
+    def result_response(self, data):
         return_latency = datetime.now() - data["sent_time"]
-        end_runtime = datetime.now() - self.start_time
+        end_runtime = self.controller_parsing_time.total_seconds() + data['dispatch_latency'].total_seconds() + data['crack_time'].total_seconds() + return_latency.total_seconds()
         print("=============================================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
-        print(f"Password Found: {data["password"]}")
+        print(f"Password Found: {data['password']}")
         print(f"Controller Parsing Time: {self.controller_parsing_time.total_seconds()} seconds")
-        print(f"Dispatch Latency: {data["dispatch_latency"].total_seconds()} seconds")
-        print(f"Cracking Time: {data["crack_time"].total_seconds()} seconds")
+        print(f"Dispatch Latency: {data['dispatch_latency'].total_seconds()} seconds")
+        print(f"Cracking Time: {data['crack_time'].total_seconds()} seconds")
         print(f"Return Latency: {return_latency.total_seconds()} seconds")
-        print(f"Total end-to-end Runtime: {end_runtime.total_seconds()} seconds")
+        print(f"Total end-to-end Runtime: {end_runtime} seconds")
         print("=============================================================")
         
         print(f"{self.controller_parsing_time.total_seconds()}")
-        print(f"{data["dispatch_latency"].total_seconds()}")
-        print(f"{data["crack_time"].total_seconds()}")
+        print(f"{data['dispatch_latency'].total_seconds()}")
+        print(f"{data['crack_time'].total_seconds()}")
         print(f"{return_latency.total_seconds()}")
-        print(f"{end_runtime.total_seconds()}")
+        print(f"{end_runtime}")
+        self.cleanup(True)
+
+    def heartbeat_response(self, data):
+        print(f"[HEARTBEAT] Response received, {data['attempts']} attempts tried.")
+
 
     def handle_error(self, err_message):
         print(f"Error: {err_message}")
         self.cleanup(False)
         
     def cleanup(self, success):
-        if hasattr(self, "server") and self.server: #self.server:
+        if hasattr(self, "server") and self.server:
             self.server.close()
         if success:
             exit(0)
