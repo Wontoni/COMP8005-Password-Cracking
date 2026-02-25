@@ -5,6 +5,7 @@ import pickle
 import argparse
 from datetime import datetime
 import time
+import itertools
 
 class Controller:
     # MD5: $1$salt$hash
@@ -29,6 +30,9 @@ class Controller:
         self.inputs = []
         self.outputs = []
         self.message_queues = {}
+        self.next_index = 0
+        
+        self.workers = {} # Addr: socket
 
         self.start_time = datetime.now()
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
@@ -75,6 +79,13 @@ class Controller:
             help="Interval between heartbeat requests (seconds)"
         )
 
+        parser.add_argument(
+            "-c", "--chunk_size",
+            type=positive_int,
+            required=True,
+            help="Chunk size to send workers"
+        )
+
         self.args = parser.parse_args()
  
     def handle_args(self):
@@ -83,8 +94,10 @@ class Controller:
             self.username = self.args.user
             self.server_port = self.args.port
             self.heartbeat_timeout = self.args.heartbeat_seconds # seconds
+            self.chunksize = self.args.chunk_size
 
         except Exception as e:
+            print(e)
             self.handle_error("Failed to retrieve inputted arguments.")
 
     def check_shadow_file(self, shadow_file):
@@ -134,14 +147,13 @@ class Controller:
     def start_server(self):
         self.create_socket()
         self.listen_connections()
-        
+        self.accept_connection()
         try:
-            while True:
-                self.accept_connection() # Accept connection then sends out the parsing information
-                while True:
-                    data = self.request_heartbeat()
-                    self.process_response(data)
-                    time.sleep(self.heartbeat_timeout)
+            self.accept_connection() # Accept connection then sends out the parsing information
+                # while True:
+                #     data = self.request_heartbeat()
+                #     self.process_response(data)
+                #     time.sleep(self.heartbeat_timeout)
 
         except Exception as e:
             print(e)
@@ -157,7 +169,7 @@ class Controller:
                 self.server = socket.create_server(addr)
                 print("Server running on default mode.")
             self.inputs = [self.server]
-            self.server.setblocking(1) # CHANGE IN THE FUTURE
+            self.server.setblocking(False) # CHANGE IN THE FUTURE
                 
         except Exception as e:
             print(e)
@@ -170,83 +182,85 @@ class Controller:
         except Exception as e:
             self.handle_error("Failed to listen to connections")
 
-    # Single Client
     def accept_connection(self):
-        try:
-            self.connection, self.client_addr = self.server.accept()
-            print("Connection received:", self.client_addr)
-            self.connection.setblocking(True)
-            self.connection.settimeout(self.heartbeat_timeout)
+        while self.inputs:
+            readable, writable, exceptional = select.select(
+                self.inputs,
+                self.outputs,
+                self.inputs
+            )
 
-            outgoing = self.handle_data()
-            self.connection.sendall(outgoing)
-            print("Sent data to", self.client_addr)
-        except Exception as e:
-            print(e)
-            self.handle_error(e)
-    # FUTURE USE, MULTIPLE CLIENTS
-    """
-    def accept_connection(self):
-        try:
-            while self.inputs:
-                readable, writable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
+            for s in readable:
+                if s is self.server:
+                    # New worker connection
+                    connection, addr = self.server.accept()
+                    # print("Connection from", addr)
+                    connection.setblocking(False)
 
-                for s in readable:
-                    if s is self.server:
-                        self.connection, client_addr = s.accept()
-                        print('Connection Received: ', client_addr)
-                        self.connection.setblocking(1)
-                        self.inputs.append(self.connection)
+                    self.inputs.append(connection)
+                    self.workers[connection] = {
+                        "addr": addr,
+                        "registered": True # Condition to register? not for this assignment..
+                    }
+                    print("Worker registered:", addr)
+                    job = self.construct_job()
+                    connection.sendall(job) # send first job
+                else:
+                    # Existing worker sent data
+                    # CHECK WHAT IS BEING SENT BACk
+                    # HEARTBEAT? UPDATE VALUES
+                    # JOB FINISHED/REQUEST? SEND NEXT JOB
+                    data = s.recv(1024)
+                    data = pickle.loads(data)
+                    print("RECEIVED")
+                    print(data)
 
-                        self.message_queues[self.connection] = queue.Queue()
+                    if data:
+                        if self.workers[s]["registered"]:
 
-                        try:
-                            next_msg = self.handle_data()
-                            self.connection.sendall(next_msg)
-                            print('Sent initial response to', client_addr)
-                        except Exception as e:
-                            print(f"Warning: failed to send initial response: {e}")
-                    else:
-                        received = s.recv(1024)
-
-                        if received:
-                            try:
-                                data = pickle.loads(received)
-                            except Exception as e:
-                                self.handle_error(f"Failed to unpickle data: {e}")
+                            if data.get('type') == "job_finished":
+                                # send a new job
+                                job = self.construct_job()
+                                s.sendall(job)
+                            elif data.get('type') == "heartbeat":
                                 continue
-
-                            self.inputs.remove(s)
-                            self.message_queues[s].put(data)
-                            if s not in self.outputs:
-                                self.outputs.append(s)
+                            elif data.get('type') == "cracked_success":
+                                self.result_response(data)
+                                continue
                         else:
-                            if s in self.outputs:
-                                self.outputs.remove(s)
-                            self.inputs.remove(s)
-                            s.close()
-
-                            del self.message_queues[s]
-
-                for s in writable:
-                    try:
-                        message_data = self.message_queues[s].get_nowait()
-                    except queue.Empty:
-                        self.outputs.remove(s)
+                            # Worker registration, not needed
+                            continue
                     else:
-                        next_msg = self.handle_data()
-                        s.sendall(next_msg)
-                
-                for s in exceptional:
-                    self.inputs.remove(s)
-                    if s in self.outputs:
-                        self.outputs.remove(s)
-                    s.close()
+                        # Connection closed
+                        print("Worker disconnected")
+                        self.inputs.remove(s)
+                        del self.workers[s]
+                        s.close()
 
-                    del self.message_queues[s]
-        except Exception as e:
-            self.handle_error(e)
-    """
+            for s in exceptional:
+                self.inputs.remove(s)
+                if s in self.workers:
+                    del self.workers[s]
+                s.close()
+    
+    def construct_job(self):
+        start_index = self.next_index
+        end_index = self.next_index + self.chunksize - 1 # 0-999 is 1000 passwords, inclusive end_index is 999
+        data = {
+            'type': "job",
+            'hash_algorithm': self.hash_algorithm,
+            'salt': self.salt,
+            'hashed_password': self.hashed_password,
+            'rounds': getattr(self, 'rounds', None),
+            'time_sent': datetime.now(),
+            'start_index': start_index,
+            'end_index': end_index
+        }
+        self.next_index += self.chunksize # Start at the next password after the chunksize
+        response = pickle.dumps(data)
+        return response
+    
+    # TODO: CHANGE FOR MULTIPLE CLIENTS, THIS IS REDUNDANT RN
     def receive_response(self):
         try:
             received = self.connection.recv(4096)
@@ -316,7 +330,6 @@ class Controller:
 
     def heartbeat_response(self, data):
         print(f"[HEARTBEAT] Response received, {data['attempts']} attempts tried.")
-
 
     def handle_error(self, err_message):
         print(f"Error: {err_message}")

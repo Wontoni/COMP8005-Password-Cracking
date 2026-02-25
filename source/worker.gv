@@ -1,76 +1,87 @@
 digraph PasswordCrackerFSM {
-    rankdir=UD;
-    node [shape=ellipse];
-
+    rankdir = UD;
+    node [shape = ellipse;];
+    
     START;
     PARSE_ARGS;
     HANDLE_ARGS;
     USAGE;
+    
     INIT_SERVICE;
     INIT_THREADS;
-    REGISTER_CONTROLLER;
+    
+    CONNECT_CONTROLLER;
+    REGISTER_WITH_CONTROLLER;
+    REQUEST_JOB;
     WAIT_FOR_JOB;
+    RECEIVE_JOB;
+    
     ASSIGN_JOBS;
     INIT_CRACKING;
     ATTEMPT_CRACK;
     CHECK_MATCH;
+    UPDATE_PROGRESS;
     WORK_EXHAUSTED;
+    
     RECEIVE_HEARTBEAT;
     SEND_HEARTBEAT;
+    
     SEND_SUCCESS;
     SEND_FAILURE;
-    UPDATE_PROGRESS;
-    CLEANUP;
-    EXIT [shape=doublecircle];
-
-    START -> PARSE_ARGS [label="parse_arguments"];
-
-    PARSE_ARGS -> HANDLE_ARGS [label="handle_arguments"];
-    PARSE_ARGS -> USAGE [label="usage"];
-
-    HANDLE_ARGS -> INIT_SERVICE [label="init_service"];
-    HANDLE_ARGS -> USAGE [label="usage"];
-
-    USAGE -> CLEANUP [label="cleanup"];
-
-    INIT_SERVICE -> INIT_THREADS [label="register_controller"];
-    INIT_SERVICE -> USAGE [label="usage"];
-
-    INIT_THREADS -> REGISTER_CONTROLLER [label="register_controller"];
-    INIT_THREADS -> USAGE [label="usage"];
-
-    REGISTER_CONTROLLER -> WAIT_FOR_JOB [label="wait_job"];
-    REGISTER_CONTROLLER -> USAGE [label="usage"];
-
-    WAIT_FOR_JOB -> ASSIGN_JOBS [label="start_cracking"];
-    WAIT_FOR_JOB -> USAGE [label="usage"];
-
-    ASSIGN_JOBS -> INIT_CRACKING [label="start_cracking"];
-    ASSIGN_JOBS -> USAGE [label="usage"];
-
-    INIT_CRACKING -> ATTEMPT_CRACK [label="crack_password"];
-    INIT_CRACKING -> USAGE [label="usage"];
-
-    ATTEMPT_CRACK -> CHECK_MATCH [label="check_match"];
-    ATTEMPT_CRACK -> UPDATE_PROGRESS [label="update_progress"]
-    ATTEMPT_CRACK -> USAGE [label="usage"];
-
-    UPDATE_PROGRESS -> ATTEMPT_CRACK [label="crack_password"]
-    UPDATE_PROGRESS -> RECEIVE_HEARTBEAT [label="receive_heartbeat"]
-    UPDATE_PROGRESS -> USAGE [label="usage"]
-
-    RECEIVE_HEARTBEAT -> SEND_HEARTBEAT [label="send_heartbeat"]
     
-
-    CHECK_MATCH -> SEND_SUCCESS [label="success"];
-    CHECK_MATCH -> ATTEMPT_CRACK [label="no match"];
-
-    ATTEMPT_CRACK -> WORK_EXHAUSTED [label="exhausted"];
-
-    WORK_EXHAUSTED -> SEND_FAILURE [label="failure"];
-
-    SEND_SUCCESS -> CLEANUP [label="cleanup"];
-    SEND_FAILURE -> CLEANUP [label="cleanup"];
-
+    CLEANUP;
+    EXIT [shape = doublecircle;];
+    
+    START -> PARSE_ARGS [label = "parse_arguments";];
+    
+    PARSE_ARGS -> HANDLE_ARGS [label = "handle_arguments";];
+    PARSE_ARGS -> USAGE [label = "usage";];
+    
+    HANDLE_ARGS -> INIT_SERVICE [label = "init_service";];
+    HANDLE_ARGS -> USAGE [label = "usage";];
+    
+    USAGE -> CLEANUP [label = "cleanup";];
+    
+    INIT_SERVICE -> INIT_THREADS [label = "init_threads";];
+    INIT_SERVICE -> USAGE [label = "usage";];
+    
+    INIT_THREADS -> CONNECT_CONTROLLER [label = "connect";];
+    INIT_THREADS -> USAGE [label = "usage";];
+    
+    CONNECT_CONTROLLER -> REGISTER_WITH_CONTROLLER [label = "connection_established";];
+    CONNECT_CONTROLLER -> USAGE [label = "connection_failed";];
+    
+    REGISTER_WITH_CONTROLLER -> REQUEST_JOB [label = "registration_success";];
+    REGISTER_WITH_CONTROLLER -> USAGE [label = "registration_failed";];
+    
+    REQUEST_JOB -> WAIT_FOR_JOB [label = "job_requested";];
+    
+    WAIT_FOR_JOB -> RECEIVE_JOB [label = "job_received";];
+    
+    RECEIVE_JOB -> ASSIGN_JOBS [label = "assign_range";];
+    RECEIVE_JOB -> USAGE [label = "invalid_job";];
+    
+    ASSIGN_JOBS -> INIT_CRACKING [label = "start_cracking";];
+    
+    INIT_CRACKING -> ATTEMPT_CRACK [label = "begin";];
+    
+    ATTEMPT_CRACK -> CHECK_MATCH [label = "hash_computed";];
+    ATTEMPT_CRACK -> UPDATE_PROGRESS [label = "progress_interval";];
+    ATTEMPT_CRACK -> WORK_EXHAUSTED [label = "range_complete";];
+    
+    UPDATE_PROGRESS -> ATTEMPT_CRACK [label = "continue";];
+    UPDATE_PROGRESS -> RECEIVE_HEARTBEAT [label = "heartbeat";];
+    
+    RECEIVE_HEARTBEAT -> SEND_HEARTBEAT [label = "reply";];
+    SEND_HEARTBEAT -> ATTEMPT_CRACK [label = "resume";];
+    
+    CHECK_MATCH -> SEND_SUCCESS [label = "match_found";];
+    CHECK_MATCH -> ATTEMPT_CRACK [label = "no_match";];
+    
+    WORK_EXHAUSTED -> SEND_FAILURE [label = "not_found";];
+    
+    SEND_SUCCESS -> CLEANUP [label = "cleanup";];
+    SEND_FAILURE -> CLEANUP [label = "cleanup";];
+    
     CLEANUP -> EXIT;
 }

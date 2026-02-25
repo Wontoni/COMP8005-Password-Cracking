@@ -45,22 +45,41 @@ class Worker:
 
         self.create_socket()
         self.connect_client()
+        # self.start_heartbeat_listener() # TODO: CHANGE
+        while True:
+            self.accept_job()
+
+
+    def accept_job(self):
         decoded_response = self.receive_response()
         self.display_message(decoded_response)
-        self.start_heartbeat_listener()
 
         start_time = datetime.now()
         self.crack_password(self.hashed_password, self.salt, self.algoritihm, self.rounds, num_threads=self.thread_count)
         end_time = datetime.now()
         self.crack_time = end_time - start_time
-        response = {
-                "type": "password",
-                "password": Worker.found_password,
-                "crack_time": self.crack_time,
-                "dispatch_latency": self.dispatch_latency,
-                "sent_time": datetime.now()
-            }
+
+        if Worker.found_event.is_set():
+            print(f"Total attempts: {Worker.attempts}")
+            # Send a crack_password type
+            response = self.create_response("cracked_success")
+        else:
+            print("Password not found.")
+            # Request a new job
+            response = self.create_response("job_finished")
+        
         self.send_response(response)
+
+
+    def create_response(self, type):
+        response = {
+            "type": type,
+            "password": Worker.found_password,
+            "crack_time": self.crack_time,
+            "dispatch_latency": self.dispatch_latency,
+            "sent_time": datetime.now()
+        }
+        return response
 
     def create_args(self):
         parser = argparse.ArgumentParser(
@@ -118,6 +137,7 @@ class Worker:
         try: 
             client.settimeout(10)
             client.connect((self.server_host, self.server_port))
+
         except Exception as e:
             print(e)
             self.handle_error(f"Failed to connect to socket with the address and port - {self.server_host}:{self.server_port}")
@@ -125,6 +145,7 @@ class Worker:
 
     def send_response(self, response): 
         try: 
+            print("SENDING RESPONSE")
             encoded = pickle.dumps(response)
             client.sendall(encoded)
         except Exception as e:
@@ -135,7 +156,7 @@ class Worker:
         try: 
             received_data = client.recv(1024)
             if not received_data:
-                raise Exception("No data received from server")
+                raise Exception
             decoded_response = pickle.loads(received_data)
             return decoded_response
         except Exception as e:
@@ -168,47 +189,50 @@ class Worker:
         self.hashed_password = message.get('hashed_password')
         self.rounds = message.get('rounds')
         self.dispatch_latency = datetime.now() - message.get('time_sent')
+        self.start_index = message.get("start_index")
+        self.end_index = message.get("end_index")
 
+    def index_to_password(self, global_index):
+        N = len(self.LEGAL_CHARACTERS)
 
-    def crack_worker(self, charset_slice, algorithm, full_hash, rounds=None):
+        # Step 1: Find correct length
+        length = 1
+        block_size = N
+
+        while global_index >= block_size:
+            global_index -= block_size
+            length += 1
+            block_size = N ** length
+
+        # Step 2: Convert remaining index to base-N
+        chars = []
+        for _ in range(length):
+            chars.append(self.LEGAL_CHARACTERS[global_index % N])
+            global_index //= N
+
+        return "".join(reversed(chars))
+
+    def crack_worker(self, algorithm, full_hash, start_index, end_index, rounds=None):
         local_attempts = 0
         batch_size = 200
-        max_length = 3
+        current_index = start_index
 
-        for length in range(1, max_length + 1):
+        while current_index <= end_index:
+            if Worker.found_event.is_set():
+                return
+            candidate = self.index_to_password(current_index)
+            success = self.check_password(candidate, algorithm, full_hash, rounds)
+            if success:
+                self.report_success(candidate, local_attempts, batch_size)
+                return
+            current_index += 1
+            local_attempts += 1
 
-            for first_char in charset_slice:
+            if local_attempts % batch_size == 0:
+                with Worker.attempts_lock:
+                    Worker.attempts += batch_size
 
-                if Worker.found_event.is_set():
-                    return
-
-                if length == 1:
-                    candidate = first_char
-                    success = self.check_password(candidate, algorithm, full_hash, rounds)
-                    local_attempts += 1
-
-                    if success:
-                        self.report_success(candidate, local_attempts, batch_size)
-                        return
-
-                else:
-                    for combo in itertools.product(Worker.LEGAL_CHARACTERS, repeat=length - 1):
-
-                        if Worker.found_event.is_set():
-                            return
-
-                        candidate = first_char + ''.join(combo)
-                        success = self.check_password(candidate, algorithm, full_hash, rounds)
-                        local_attempts += 1
-
-                        if local_attempts % batch_size == 0:
-                            with Worker.attempts_lock:
-                                Worker.attempts += batch_size
-
-                        if success:
-                            self.report_success(candidate, local_attempts, batch_size)
-                            return
-
+        print("Finished trying passwords:", local_attempts)
         # flush remainder
         remainder = local_attempts % batch_size
         if remainder:
@@ -243,19 +267,17 @@ class Worker:
 
         full_hash = f"${algorithm}{salt}{hashed_password}"
 
-        charset = Worker.LEGAL_CHARACTERS
-        chunk_size = len(charset) // num_threads
-
+        chunk_size = self.end_index - self.start_index 
+        thread_chunk = chunk_size // num_threads
         threads = []
 
         for i in range(num_threads):
-            start = i * chunk_size
-            end = None if i == num_threads - 1 else (i + 1) * chunk_size
-            charset_slice = charset[start:end]
+            start = i * thread_chunk
+            end = self.end_index if i == num_threads - 1 else (i + 1) * thread_chunk
 
             t = threading.Thread(
                 target=self.crack_worker,
-                args=(charset_slice, algorithm, full_hash, rounds)
+                args=(algorithm, full_hash, start, end, rounds)
             )
             t.start()
             threads.append(t)
@@ -263,10 +285,7 @@ class Worker:
         for t in threads:
             t.join()
 
-        if Worker.found_event.is_set():
-            print(f"Total attempts: {Worker.attempts}")
-        else:
-            print("Password not found.")
+
 
 
     def start_heartbeat_listener(self):
@@ -284,7 +303,7 @@ class Worker:
             if request:
                 with Worker.attempts_lock:
                     response = {"type": "heartbeat", "attempts": Worker.attempts}
-                    self.send_response(response)
+                    # self.send_response(response)
                     print("[HEARTBEAT] Response sent")
 
 
