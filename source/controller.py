@@ -222,6 +222,7 @@ class Controller:
 
                             if data.get('type') == "job_finished":
                                 # send a new job
+                                print("SENDING NEW JOB========================")
                                 job = self.construct_job()
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":

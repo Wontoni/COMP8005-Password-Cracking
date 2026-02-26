@@ -298,7 +298,7 @@ class Worker:
 
         if decoded_message.get('type') == "job":
             self.accept_job()
-        elif decoded_message.get('type') == "heartbeat":
+        elif decoded_message.get('type') == "heartbeat_request":
             self.handle_heartbeat_request()
         else:
             print('[ERROR] Invalid response received')
