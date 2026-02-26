@@ -359,7 +359,7 @@ class Controller:
             self.cleanup(False)
 
     def result_response(self, data):
-        return_latency = datetime.now() - data["sent_time"]
+        return_latency = 1#datetime.now() - data["sent_time"]
         end_runtime = self.controller_parsing_time.total_seconds() + data['dispatch_latency'].total_seconds() + data['crack_time'].total_seconds() + return_latency.total_seconds()
         print("=============================================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")

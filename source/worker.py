@@ -189,7 +189,7 @@ class Worker:
         self.salt = message.get('salt')
         self.hashed_password = message.get('hashed_password')
         self.rounds = message.get('rounds')
-        self.dispatch_latency = datetime.now() - message.get('time_sent')
+        self.dispatch_latency = 1 #datetime.now() - message.get('time_sent')
         self.start_index = message.get("start_index")
         self.end_index = message.get("end_index")
 
