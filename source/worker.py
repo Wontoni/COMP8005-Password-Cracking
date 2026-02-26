@@ -14,6 +14,7 @@ import hashlib
 class Worker:
     attempts = 0
     attempts_lock = threading.Lock()
+    jobs_lock = threading.Lock()
     found_event = threading.Event()
     shutdown_event = threading.Event()
     found_password = None
@@ -35,6 +36,7 @@ class Worker:
         self.client = None
 
         self.threads = []
+        self.job_list = [] # [(start_index, end_index), (...)]
         
         self.run()
 
@@ -45,7 +47,7 @@ class Worker:
 
         self.create_socket()
         self.connect_client()
-        # self.start_heartbeat_listener() # TODO: CHANGE
+        self.start_thread_listener()
         while True:
             self.accept_job()
 
@@ -145,7 +147,6 @@ class Worker:
 
     def send_response(self, response): 
         try: 
-            print("SENDING RESPONSE")
             encoded = pickle.dumps(response)
             client.sendall(encoded)
         except Exception as e:
@@ -286,25 +287,31 @@ class Worker:
             t.join()
 
 
-
-
-    def start_heartbeat_listener(self):
-        hb_thread = threading.Thread(
-            target=self.heartbeat_listener,
+    def start_thread_listener(self):
+        thread_listener = threading.Thread(
+            target=self.listener_thread,
             daemon=True)
-        hb_thread.start()
+        thread_listener.start()
 
-    def heartbeat_listener(self):
+    def listener_thread(self):
+        decoded_message = self.receive_response()
+
+        if decoded_message.get('type') == "job":
+            self.accept_job()
+        elif decoded_message.get('type') == "heartbeat":
+            self.handle_heartbeat_request()
+        else:
+            print('[ERROR] Invalid response received')
+            self.cleanup(False)
+
+    def handle_heartbeat_request(self):
         
         while not Worker.shutdown_event.is_set():
-
-            request = self.receive_response()
             print("[HEARTBEAT] Request received")
-            if request:
-                with Worker.attempts_lock:
-                    response = {"type": "heartbeat", "attempts": Worker.attempts}
-                    # self.send_response(response)
-                    print("[HEARTBEAT] Response sent")
+            with Worker.attempts_lock:
+                response = {"type": "heartbeat", "attempts": Worker.attempts} # TODO: DELTA
+                self.send_response(response)
+                print("[HEARTBEAT] Response sent")
 
 
     def cleanup(self, success):

@@ -200,7 +200,9 @@ class Controller:
                     self.inputs.append(connection)
                     self.workers[connection] = {
                         "addr": addr,
-                        "registered": True # Condition to register? not for this assignment..
+                        "registered": True, # Condition to register? not for this assignment..
+                        "last_heartbeat_sent": time.time(),
+                        "last_heartbeat_received": time.time()
                     }
                     print("Worker registered:", addr)
                     job = self.construct_job()
@@ -223,19 +225,36 @@ class Controller:
                                 job = self.construct_job()
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
-                                continue
+                                self.heartbeat_response(s)
                             elif data.get('type') == "cracked_success":
                                 self.result_response(data)
-                                continue
                         else:
                             # Worker registration, not needed
                             continue
                     else:
-                        # Connection closed
                         print("Worker disconnected")
                         self.inputs.remove(s)
                         del self.workers[s]
                         s.close()
+
+                    # Heartbeat
+                    now = time.time()
+                    for ws, wdata in list(self.workers.items()):
+                        if not wdata['registered']:
+                            continue
+
+                        if wdata['last_heartbeat_received'] > wdata['last_heartbeat_sent']:
+                            if now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout: # send every x (heartbeat_timeout) seconds
+                                try:
+                                    self.request_heartbeat(ws)
+                                    wdata['last_heartbeat_sent'] = now
+                                except Exception as e:
+                                    print(f"[HEARTBEAT] Error sending heartbeat to {wdata['addr']}: {e}")
+                                    self.remove_worker(ws)
+                        elif now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout:
+                            print(f"[HEARTBEAT] Worker timing out: {wdata['addr']}")
+                            self.remove_worker(ws)
+
 
             for s in exceptional:
                 self.inputs.remove(s)
@@ -260,6 +279,17 @@ class Controller:
         response = pickle.dumps(data)
         return response
     
+    def remove_worker(self, ws):
+        addr = self.workers[ws]['addr']
+        print(f"[WORKER] Removing worker {addr}")
+        if ws in self.inputs:
+            self.inputs.remove(ws)
+        del self.workers[ws]
+        try:
+            ws.close()
+        except Exception:
+            pass
+    
     # TODO: CHANGE FOR MULTIPLE CLIENTS, THIS IS REDUNDANT RN
     def receive_response(self):
         try:
@@ -278,14 +308,33 @@ class Controller:
         except Exception as e:
             self.handle_error(f"Failed to unpickle data: {e}")
 
-    def request_heartbeat(self):
-        outgoing = {"type": "heartbeat-request"}
-        response = pickle.dumps(outgoing)
-        self.connection.sendall(response)
-        print('Sent heartbeat request to', self.client_addr)
+    def request_heartbeat(self, worker_socket):
+        try:
+            # Send heartbeat request
+            msg = {"type": "heartbeat_request", "time_sent": time.time()}
+            worker_socket.sendall(pickle.dumps(msg))
+            print(f"[HEARTBEAT] Sent request to {self.workers[worker_socket]['addr']}")
 
-        data = self.receive_response()
-        return data
+            # # Wait for response
+            # data = worker_socket.recv(4096)
+            # if not data:
+            #     # Worker disconnected
+            #     print(f"[HEARTBEAT] Worker {self.workers[worker_socket]['addr']} disconnected")
+            #     self.remove_worker(worker_socket)
+            #     return
+
+            # # Deserialize response
+            # response = pickle.loads(data)
+            # if response.get("type") == "heartbeat":
+            #     self.workers[worker_socket]["last_heartbeat"] = time.time()
+            #     attempts = response.get("attempts", 0)
+            #     print(f"[HEARTBEAT] Response received from {self.workers[worker_socket]['addr']}, attempts: {attempts}")
+            # else:
+            #     print(f"[HEARTBEAT] Unexpected response type from {self.workers[worker_socket]['addr']}")
+
+        except Exception as e:
+            print(f"[HEARTBEAT] Error communicating with {self.workers[worker_socket]['addr']}: {e}")
+            self.remove_worker(worker_socket)
 
     def handle_data(self):
         data = {
@@ -328,8 +377,9 @@ class Controller:
         print(f"{end_runtime}")
         self.cleanup(True)
 
-    def heartbeat_response(self, data):
+    def heartbeat_response(self, data, ws):
         print(f"[HEARTBEAT] Response received, {data['attempts']} attempts tried.")
+        self.workers[ws]["last_heartbeat_received"] = time.time()
 
     def handle_error(self, err_message):
         print(f"Error: {err_message}")
