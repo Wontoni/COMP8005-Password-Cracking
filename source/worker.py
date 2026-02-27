@@ -81,11 +81,11 @@ class Worker:
 
 
 
-    def create_response(self, type, crack_time=None,):
+    def create_response(self, type):
         response = {
             "type": type,
             "password": Worker.found_password,
-            "crack_time": crack_time,
+            "crack_time": self.total_crack_time,
             "dispatch_latency": self.dispatch_latency,
             "sent_time": time.time()
         }
@@ -280,7 +280,7 @@ class Worker:
 
         print(f"Total attempts: {Worker.attempts}")
         # Send a crack_password type
-        response = self.create_response("cracked_success", crack_time=None)
+        response = self.create_response("cracked_success")
         self.send_response(response)
         self.cleanup(True)
 
