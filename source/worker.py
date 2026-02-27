@@ -44,6 +44,7 @@ class Worker:
         self.job_queue = queue.Queue()
 
         self.dispatch_latency = 0
+        self.total_crack_time = 0
         self.run()
 
     def run(self):
@@ -220,6 +221,7 @@ class Worker:
                 Worker.active_jobs += 1
 
             try:
+                start_crack_time = time.time()
                 local_attempts = 0
                 batch_size = 200
                 current_index = start_index
@@ -231,6 +233,8 @@ class Worker:
                     candidate = self.index_to_password(current_index)
                     success = self.check_password(candidate, algorithm, full_hash, rounds)
                     if success:
+                        end_crack_time = time.time()
+                        self.total_crack_time += end_crack_time - start_crack_time
                         self.report_success(candidate, local_attempts, batch_size)
                         break
 
@@ -248,6 +252,8 @@ class Worker:
                         Worker.attempts += remainder
 
             finally:
+                end_crack_time = time.time()
+                self.total_crack_time == end_crack_time - start_crack_time
                 with Worker.active_jobs_lock:
                     Worker.active_jobs -= 1
 
