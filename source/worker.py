@@ -69,9 +69,6 @@ class Worker:
         start_index = decoded_message.get('start_index')
         end_index = decoded_message.get('end_index')
         full_hash = f"${algorithm}{salt}{hashed_password}"
-        print("CHECKKKK")
-        print(time.time())
-        print(decoded_message.get('time_sent'))
         self.dispatch_latency = time.time() - decoded_message.get('time_sent')
 
         chunk_size = end_index - start_index 
