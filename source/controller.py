@@ -359,7 +359,7 @@ class Controller:
         print(f"{self.controller_parsing_time}")
         print(f"{self.total_dispatch_latency}")
         print(f"{self.total_crack_time}")
-        print(f"{self.return_latency}")
+        print(f"{self.total_return_latency}")
         print(f"{end_runtime}")
         self.cleanup(True)
 
