@@ -226,7 +226,7 @@ class Controller:
                                 job = self.construct_job()
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
-                                self.heartbeat_response(s)
+                                self.heartbeat_response(data, s)
                             elif data.get('type') == "cracked_success":
                                 self.result_response(data)
                         else:
