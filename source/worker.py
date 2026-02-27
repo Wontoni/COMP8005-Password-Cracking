@@ -42,6 +42,8 @@ class Worker:
 
         self.threads = []
         self.job_queue = queue.Queue()
+
+        self.dispatch_latency = 0
         self.run()
 
     def run(self):
@@ -66,6 +68,7 @@ class Worker:
         start_index = decoded_message.get('start_index')
         end_index = decoded_message.get('end_index')
         full_hash = f"${algorithm}{salt}{hashed_password}"
+        self.dispatch_latency = time.time() - decoded_message.get('time_sent')
 
         chunk_size = end_index - start_index 
         thread_chunk = chunk_size // self.thread_count
@@ -77,13 +80,13 @@ class Worker:
 
 
 
-    def create_response(self, type):
+    def create_response(self, type, crack_time=None,):
         response = {
             "type": type,
             "password": Worker.found_password,
-            # "crack_time": self.crack_time,
-            # "dispatch_latency": self.dispatch_latency,
-            "sent_time": datetime.now()
+            "crack_time": crack_time,
+            "dispatch_latency": self.dispatch_latency,
+            "sent_time": time.time()
         }
         return response
 
@@ -190,16 +193,6 @@ class Worker:
         print(f"Error: {err_message}")
         self.cleanup(False)
 
-    def display_message(self, message):
-        print(f'Received response\n{message}')
-        self.algoritihm = message.get('hash_algorithm')
-        self.salt = message.get('salt')
-        self.hashed_password = message.get('hashed_password')
-        self.rounds = message.get('rounds')
-        self.dispatch_latency = 1 #datetime.now() - message.get('time_sent')
-        self.start_index = message.get("start_index")
-        self.end_index = message.get("end_index")
-
     def index_to_password(self, global_index):
         N = len(self.LEGAL_CHARACTERS)
 
@@ -281,7 +274,7 @@ class Worker:
 
         print(f"Total attempts: {Worker.attempts}")
         # Send a crack_password type
-        response = self.create_response("cracked_success")
+        response = self.create_response("cracked_success", crack_time=None)
         self.send_response(response)
         self.cleanup(True)
 
@@ -299,7 +292,6 @@ class Worker:
 
     def listener_thread(self):
         while not Worker.found_event.is_set():
-            print("LISTENING--------------------")
             decoded_message = self.receive_response()
             if decoded_message is None:
                 with Worker.active_jobs_lock:

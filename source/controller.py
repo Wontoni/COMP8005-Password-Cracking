@@ -31,13 +31,17 @@ class Controller:
         self.outputs = []
         self.message_queues = {}
         self.next_index = 0
-        
-        self.workers = {} # Addr: socket
 
-        self.start_time = datetime.now()
+        self.workers = {}
+
+        self.total_dispatch_latency = 0
+        self.total_crack_time = 0
+        self.total_return_latency = 0
+
+        self.start_time = time.time()
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
         self.parse_shadow_username(self.shadow_file_contents)
-        parse_time = datetime.now()
+        parse_time = time.time()
 
         self.controller_parsing_time = parse_time - self.start_time
         self.start_server()
@@ -149,11 +153,7 @@ class Controller:
         self.listen_connections()
         self.accept_connection()
         try:
-            self.accept_connection() # Accept connection then sends out the parsing information
-                # while True:
-                #     data = self.request_heartbeat()
-                #     self.process_response(data)
-                #     time.sleep(self.heartbeat_timeout)
+            self.accept_connection()
 
         except Exception as e:
             print(e)
@@ -222,7 +222,7 @@ class Controller:
 
                             if data.get('type') == "job_finished":
                                 # send a new job
-                                print("SENDING NEW JOB========================")
+                                self.handle_performance(data)
                                 job = self.construct_job()
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
@@ -262,7 +262,16 @@ class Controller:
                 if s in self.workers:
                     del self.workers[s]
                 s.close()
-    
+    def handle_performance(self, data):
+        dispatch_latency = data.get('dispatch_latency')
+        self.total_dispatch_latency += dispatch_latency
+
+        crack_time = data.get('crack_time')
+        self.total_crack_time += crack_time
+
+        return_latency = data.get('sent_time')
+        self.total_return_latency += time.time() - return_latency
+
     def construct_job(self):
         start_index = self.next_index
         end_index = self.next_index + self.chunksize - 1 # 0-999 is 1000 passwords, inclusive end_index is 999
@@ -272,7 +281,7 @@ class Controller:
             'salt': self.salt,
             'hashed_password': self.hashed_password,
             'rounds': getattr(self, 'rounds', None),
-            'time_sent': datetime.now(),
+            'time_sent': time.time(),
             'start_index': start_index,
             'end_index': end_index
         }
@@ -315,24 +324,6 @@ class Controller:
             msg = {"type": "heartbeat_request", "time_sent": time.time()}
             worker_socket.sendall(pickle.dumps(msg))
             print(f"[HEARTBEAT] Sent request to {self.workers[worker_socket]['addr']}")
-
-            # # Wait for response
-            # data = worker_socket.recv(4096)
-            # if not data:
-            #     # Worker disconnected
-            #     print(f"[HEARTBEAT] Worker {self.workers[worker_socket]['addr']} disconnected")
-            #     self.remove_worker(worker_socket)
-            #     return
-
-            # # Deserialize response
-            # response = pickle.loads(data)
-            # if response.get("type") == "heartbeat":
-            #     self.workers[worker_socket]["last_heartbeat"] = time.time()
-            #     attempts = response.get("attempts", 0)
-            #     print(f"[HEARTBEAT] Response received from {self.workers[worker_socket]['addr']}, attempts: {attempts}")
-            # else:
-            #     print(f"[HEARTBEAT] Unexpected response type from {self.workers[worker_socket]['addr']}")
-
         except Exception as e:
             print(f"[HEARTBEAT] Error communicating with {self.workers[worker_socket]['addr']}: {e}")
             self.remove_worker(worker_socket)
@@ -344,37 +335,31 @@ class Controller:
             'salt': self.salt,
             'hashed_password': self.hashed_password,
             'rounds': getattr(self, 'rounds', None),
-            'time_sent': datetime.now()
+            'time_sent': time.time()
         }
         response = pickle.dumps(data)
         return response
 
-    def process_response(self, data):
-        if data["type"] == "password":
-            self.result_response(data)
-        elif data["type"] == "heartbeat":
-            self.heartbeat_response(data)
-        else:
-            print("RECEIVED UNKNOWN RESPONSE")
-            self.cleanup(False)
-
     def result_response(self, data):
-        return_latency = 1#datetime.now() - data["sent_time"]
-        end_runtime = self.controller_parsing_time.total_seconds() + data['dispatch_latency'].total_seconds() + data['crack_time'].total_seconds() + return_latency.total_seconds()
+        end_runtime = time.time() - self.start_time
+        self.total_dispatch_latency += data.get('dispatch_latency')
+        self.total_crack_time += data.get('crack_time')
+        self.total_return_latency += time.time() - data.get('sent_time')
+
         print("=============================================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
         print(f"Password Found: {data['password']}")
-        print(f"Controller Parsing Time: {self.controller_parsing_time.total_seconds()} seconds")
-        print(f"Dispatch Latency: {data['dispatch_latency'].total_seconds()} seconds")
-        print(f"Cracking Time: {data['crack_time'].total_seconds()} seconds")
-        print(f"Return Latency: {return_latency.total_seconds()} seconds")
+        print(f"Controller Parsing Time: {self.controller_parsing_time} seconds")
+        print(f"Dispatch Latency: {self.total_dispatch_latency} seconds")
+        print(f"Cracking Time: {self.total_crack_time} seconds")
+        print(f"Return Latency: {self.total_return_latency} seconds")
         print(f"Total end-to-end Runtime: {end_runtime} seconds")
         print("=============================================================")
         
-        print(f"{self.controller_parsing_time.total_seconds()}")
-        print(f"{data['dispatch_latency'].total_seconds()}")
-        print(f"{data['crack_time'].total_seconds()}")
-        print(f"{return_latency.total_seconds()}")
+        print(f"{self.controller_parsing_time}")
+        print(f"{self.total_dispatch_latency}")
+        print(f"{self.total_crack_time}")
+        print(f"{self.return_latency}")
         print(f"{end_runtime}")
         self.cleanup(True)
 
