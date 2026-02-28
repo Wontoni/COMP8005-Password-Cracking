@@ -13,6 +13,7 @@ import time
 
 class Worker:
     attempts = 0
+    last_attempt = 0
     attempts_lock = threading.Lock()
     jobs_lock = threading.Lock()
     found_event = threading.Event()
@@ -327,7 +328,8 @@ class Worker:
     def handle_heartbeat_request(self):
         print("[HEARTBEAT] Request received")
         with Worker.attempts_lock:
-            response = {"type": "heartbeat", "attempts": Worker.attempts} # TODO: DELTA
+            delta = Worker.attempts - Worker.last_attempt
+            response = {"type": "heartbeat", "attempts": Worker.attempts, "detla_attempts": delta}
             self.send_response(response)
             print("[HEARTBEAT] Response sent")
 

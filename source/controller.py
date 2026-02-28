@@ -364,7 +364,7 @@ class Controller:
         self.cleanup(True)
 
     def heartbeat_response(self, data, ws):
-        print(f"[HEARTBEAT] Response received, {data['attempts']} attempts tried.")
+        print(f"[HEARTBEAT] Response received, {data['delta_attempts']} attempts tried since last heartbeat.")
         self.workers[ws]["last_heartbeat_received"] = time.time()
 
     def handle_error(self, err_message):
