@@ -329,7 +329,7 @@ class Worker:
         print("[HEARTBEAT] Request received")
         with Worker.attempts_lock:
             delta = Worker.attempts - Worker.last_attempt
-            response = {"type": "heartbeat", "attempts": Worker.attempts, "detla_attempts": delta}
+            response = {"type": "heartbeat", "attempts": Worker.attempts, "delta_attempts": delta}
             self.send_response(response)
             print("[HEARTBEAT] Response sent")
 
