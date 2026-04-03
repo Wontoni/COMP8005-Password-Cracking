@@ -23,6 +23,9 @@ digraph ControllerFSM {
     
     SEND_HEARTBEAT;
     RECEIVE_HEARTBEAT;
+    HEARTBEAT_TIMEOUT;
+    
+    REQUEUE_JOB;
     
     CLEANUP;
     EXIT [shape = doublecircle;];
@@ -58,12 +61,16 @@ digraph ControllerFSM {
     
     WAIT_FOR_RESULT -> RECEIVE_RESULTS [label = "result_received";];
     WAIT_FOR_RESULT -> SEND_HEARTBEAT [label = "heartbeat_interval";];
-    WAIT_FOR_RESULT -> USAGE [label = "error";];
     
     SEND_HEARTBEAT -> RECEIVE_HEARTBEAT [label = "heartbeat_ack";];
-    SEND_HEARTBEAT -> USAGE [label = "heartbeat_failed";];
+    SEND_HEARTBEAT -> HEARTBEAT_TIMEOUT [label = "no_response";];
     
     RECEIVE_HEARTBEAT -> WAIT_FOR_RESULT [label = "continue_waiting";];
+    
+    HEARTBEAT_TIMEOUT -> REQUEUE_JOB [label = "worker_dead";];
+    
+    REQUEUE_JOB -> WAIT_FOR_WORKER_REQUEST [label = "job_requeued";];
+    
     
     RECEIVE_RESULTS -> REPORT_RESULTS [label = "process_results";];
     RECEIVE_RESULTS -> USAGE [label = "invalid_result";];
