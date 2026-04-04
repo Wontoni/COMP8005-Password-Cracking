@@ -246,7 +246,7 @@ class Controller:
                             # Worker registration, not needed
                             continue
                     else:
-                        print("Worker disconnected")
+                        print("Worker disconnected FIX SOMETHING HERE RAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
                         self.inputs.remove(s)
                         del self.workers[s]
                         s.close()
@@ -325,6 +325,9 @@ class Controller:
     def remove_worker(self, ws):
         addr = self.workers[ws]['addr']
         # TODO HERE
+        failed_job = self.workers[ws]["assigned_chunk"]
+        self.failed_jobs.append(failed_job)
+
         print(f"[WORKER] Removing worker {addr}")
         if ws in self.inputs:
             self.inputs.remove(ws)

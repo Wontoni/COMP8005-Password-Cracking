@@ -239,12 +239,14 @@ class Worker:
         while not Worker.shutdown_event.is_set():
             try:
                 algorithm, full_hash, start_index, end_index, checkpoint_interval, chunk_start = self.job_queue.get(timeout=0.5)
+                Worker.attempts = start_index - chunk_start
+
                 last_job = self.load_job_info()
                 if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
                     start_index = last_job[5]
-                    Worker.attempts = last_job[5] - chunk_start
                 else:
                     self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval, start_index])
+                
             except queue.Empty:
                 continue
 
