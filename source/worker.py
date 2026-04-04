@@ -11,11 +11,12 @@ import time
 import ctypes
 import sys
 import faulthandler
+from yescrypt_wrap import verify_yescrypt
 
 faulthandler.enable()
 
-libcrypt = ctypes.CDLL("libcrypt.so.1")
-libcrypt.crypt.restype = ctypes.c_char_p
+# libcrypt = ctypes.CDLL("libcrypt.so.1")
+# libcrypt.crypt.restype = ctypes.c_char_p
 
 
 class Worker:
@@ -63,7 +64,6 @@ class Worker:
         self.create_socket()
         self.connect_client()
 
-        print("GIL enabled:", sys._is_gil_enabled())
 
         self.start_thread_listener()
         self.start_worker_threads(self.thread_count)
@@ -91,7 +91,7 @@ class Worker:
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
         elif algorithm in ["1", "5", "6", "y"]:
-            full_hash = f"${algorithm}${salt}{hashed_password}"
+            full_hash = f"${algorithm}{salt}{hashed_password}"
         else:
             raise Exception(f"Unsupported hash algorithm: {algorithm}")
 
@@ -249,7 +249,7 @@ class Worker:
                         elapsed = time.time() - start_crack_time
                         self.total_crack_time += elapsed
                         self.report_success(candidate, local_attempts)
-                        break
+                        
 
                     if local_attempts % batch_size == 0:
                         with Worker.attempts_lock:
@@ -269,6 +269,11 @@ class Worker:
 
                 self.job_queue.task_done()
                 print(f"[END] {threading.current_thread().name} attempts={local_attempts}")
+                with Worker.active_jobs_lock:
+                    if self.job_queue.qsize() == 0 and Worker.active_jobs == 0 and not self.waiting_for_job:
+                        self.request_job()
+                        self.waiting_for_job = True
+
 
     def check_password(self, password, algorithm, full_hash):
         if algorithm == "1":
@@ -284,12 +289,7 @@ class Worker:
             return bcrypt.checkpw(password.encode()[:72], full_hash.encode())
 
         elif algorithm == "y":
-            # crypt() is not safe to call concurrently; serialize it
-            with Worker.yescrypt_lock:
-                result = libcrypt.crypt(password.encode("utf-8"), full_hash.encode("utf-8"))
-                if not result:
-                    return False
-                return result.decode() == full_hash
+            return verify_yescrypt(password, full_hash)
 
         else:
             raise Exception(f"Unsupported hash algorithm: {algorithm}")
@@ -324,18 +324,10 @@ class Worker:
                 break
 
             decoded_message = self.receive_response()
-
             if decoded_message is None:
-                with Worker.active_jobs_lock:
-                    if self.job_queue.qsize() == 0 and Worker.active_jobs == 0 and not self.waiting_for_job:
-                        self.request_job()
-                        self.waiting_for_job = True
-                time.sleep(0.01)
                 continue
 
             msg_type = decoded_message.get("type")
-            print("-------------------------------////////////////////////////////////////////")
-            print(msg_type)
             if msg_type == "job":
                 print("============================ JOB RECEIVED ============================")
                 self.waiting_for_job = False
@@ -344,7 +336,9 @@ class Worker:
             elif msg_type == "heartbeat_request":
                 print("==================== HEARTBEAT REQUEST RECEIVED ====================")
                 self.handle_heartbeat_request()
-
+            elif msg_type == "end":
+                print("==================== SHUTDOWN FLAG RECEIVED ====================")
+                Worker.shutdown_event.set()
             else:
                 print("[ERROR] Invalid response received")
                 Worker.shutdown_event.set()
