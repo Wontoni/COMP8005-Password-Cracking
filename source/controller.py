@@ -234,6 +234,8 @@ class Controller:
                                 # send a new job
                                 self.handle_performance(data)
                                 job, assigned_job = self.construct_job()
+                                print("[ASSIGN] Assigning job", assigned_job)
+                                print(s)
                                 self.workers[s]["assgined_chunk"] = assigned_job
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
@@ -280,8 +282,9 @@ class Controller:
                 s.close()
 
     def handle_checkpoint(self, data, worker):
+
         self.workers[worker]["assigned_chunk"][2] = data["checkpoint"]
-        print("===================WORKER INFORMATION:", self.workers[worker]["assigned_chunk"])
+        print("[Worker Checkpoint]:", self.workers[worker]["assigned_chunk"])
 
     def handle_performance(self, data):
         dispatch_latency = data.get('dispatch_latency')

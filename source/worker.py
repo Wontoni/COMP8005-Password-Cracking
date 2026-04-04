@@ -124,14 +124,16 @@ class Worker:
             self.job_queue.put((algorithm, full_hash, thread_start, thread_end, checkpoint_interval, start_index))
             print(f"[JOB SPLIT] thread={i} range=({thread_start}, {thread_end})")
 
-    def create_response(self, msg_type, checkpoint=0):
+    def create_response(self, msg_type, checkpoint=0, start=0, end=0):
         return {
             "type": msg_type,
             "password": Worker.found_password,
             "crack_time": self.total_crack_time,
             "dispatch_latency": self.dispatch_latency,
             "sent_time": time.time(),
-            "checkpoint": checkpoint
+            "checkpoint": checkpoint,
+            "start_index": start,
+            "end_index": end
         }
 
     def create_args(self):
@@ -283,7 +285,7 @@ class Worker:
                             Worker.checkpoint += batch_size
                             if Worker.checkpoint % checkpoint_interval == 0:
                                 print("[CHECKPOINT] Sending checkpoint to controller", Worker.checkpoint)
-                                response = self.create_response("checkpoint", Worker.checkpoint)
+                                response = self.create_response("checkpoint", Worker.checkpoint, chunk_start, end_index)
                                 self.send_response(response)
 
                 remainder = local_attempts % batch_size
