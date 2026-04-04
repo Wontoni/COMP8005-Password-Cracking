@@ -100,8 +100,8 @@ class Worker:
         else:
             self.store_job_info([algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval, curr_checkpoint])
         Worker.checkpoint = curr_checkpoint
-        Worker.start = start_index
-        Worker.end = end_index
+        Worker.current_start = start_index
+        Worker.current_end = end_index
 
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
