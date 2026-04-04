@@ -243,6 +243,7 @@ class Worker:
 
                 last_job = self.load_job_info()
                 if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
+                    print("[RESTORED] Resuming from local checkpoint")
                     start_index = last_job[5]
                 else:
                     self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval, start_index])
