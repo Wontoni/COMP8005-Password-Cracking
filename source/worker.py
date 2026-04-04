@@ -242,6 +242,7 @@ class Worker:
                 last_job = self.load_job_info()
                 if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
                     start_index = last_job[5]
+                    Worker.attempts = last_job[5] - chunk_start
                 else:
                     self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval, start_index])
             except queue.Empty:
@@ -254,7 +255,7 @@ class Worker:
 
             start_crack_time = time.time()
             local_attempts = 0
-            batch_size = 50
+            batch_size = 1
 
             try:
                 for current_index in range(start_index, end_index + 1):
@@ -273,8 +274,6 @@ class Worker:
                     if local_attempts % batch_size == 0:
                         with Worker.attempts_lock:
                             Worker.attempts += batch_size
-                            print("[WORKER ATTEMPTS]", Worker.attempts)
-                            print("[MODULUS]", Worker.attempts % checkpoint_interval)
                             if Worker.attempts % checkpoint_interval == 0:
                                 print("SEND")
                                 response = self.create_response("checkpoint", Worker.attempts)

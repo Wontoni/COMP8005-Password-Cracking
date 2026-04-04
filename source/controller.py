@@ -221,6 +221,8 @@ class Controller:
                     connection.sendall(job_order) # send first job
                 else:
                     data = s.recv(1024)
+                    if not data:
+                        continue
                     data = pickle.loads(data)
                     print("RECEIVED")
                     print(data)
@@ -348,7 +350,8 @@ class Controller:
             print("Received data from client:", data)
             return data
         except Exception as e:
-            self.handle_error(f"Failed to unpickle data: {e}")
+            pass
+            # self.handle_error(f"Failed to unpickle data: {e}")
 
     def request_heartbeat(self, worker_socket):
         try:
