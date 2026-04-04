@@ -273,18 +273,18 @@ class Worker:
                     if local_attempts % batch_size == 0:
                         with Worker.attempts_lock:
                             Worker.attempts += batch_size
+                            print("[WORKER ATTEMPTS]", Worker.attempts)
+                            print("[MODULUS]", Worker.attempts % checkpoint_interval)
+                            if Worker.attempts % checkpoint_interval == 0:
+                                print("SEND")
+                                response = self.create_response("checkpoint", Worker.attempts)
+                                self.send_response(response)
 
                 remainder = local_attempts % batch_size
                 print(local_attempts)
                 if remainder:
                     with Worker.attempts_lock:
                         Worker.attempts += remainder
-                        print("[WORKER ATTEMPTS]", Worker.attempts)
-                        print("[MODULUS]", Worker.attempts % checkpoint_interval)
-                        if Worker.attempts % checkpoint_interval == 0:
-                            print("SEND")
-                            response = self.create_response("checkpoint", Worker.attempts)
-                            self.send_response(response)
 
             finally:
                 elapsed = time.time() - start_crack_time
