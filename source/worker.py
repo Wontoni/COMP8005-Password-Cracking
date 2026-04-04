@@ -21,6 +21,7 @@ faulthandler.enable()
 class Worker:
     attempts = 0
     last_attempt = 0
+    checkpoint = 0
     attempts_lock = threading.Lock()
     jobs_lock = threading.Lock()
     found_event = threading.Event()
@@ -280,9 +281,10 @@ class Worker:
                     if local_attempts % batch_size == 0:
                         with Worker.attempts_lock:
                             Worker.attempts += batch_size
-                            if Worker.attempts % checkpoint_interval == 0:
-                                print("[CHECKPOINT] Sending checkpoint to controller", Worker.attempts)
-                                response = self.create_response("checkpoint", Worker.attempts)
+                            Worker.checkpoint += batch_size
+                            if Worker.checkpoint % checkpoint_interval == 0:
+                                print("[CHECKPOINT] Sending checkpoint to controller", Worker.checkpoint)
+                                response = self.create_response("checkpoint", Worker.checkpoint)
                                 self.send_response(response)
 
                 remainder = local_attempts % batch_size
