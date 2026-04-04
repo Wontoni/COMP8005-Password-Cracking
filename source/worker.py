@@ -278,6 +278,8 @@ class Worker:
                 if remainder:
                     with Worker.attempts_lock:
                         Worker.attempts += remainder
+                        print("[WORKER ATTEMPTS]", Worker.attempts)
+                        print("[MODULUS]", Worker.attempts % checkpoint_interval)
                         if Worker.attempts % checkpoint_interval == 0:
                             print("SEND")
                             response = self.create_response("checkpoint", Worker.attempts)

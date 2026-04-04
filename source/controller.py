@@ -217,7 +217,7 @@ class Controller:
                     }
                     print("Worker registered:", addr)
                     job_order, job_assigned = self.construct_job()
-                    s['assigned_chunk'] = job_assigned
+                    self.workers[connection]['assigned_chunk'] = job_assigned
                     connection.sendall(job_order) # send first job
                 else:
                     data = s.recv(1024)
