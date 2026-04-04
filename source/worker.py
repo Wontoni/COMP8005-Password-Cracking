@@ -246,7 +246,6 @@ class Worker:
 
     @staticmethod
     def load_job_info(filename="checkpoint.bin"):
-        print(os.path.exists(filename))
         if os.path.exists(filename):
             with open(filename, "rb") as f:
                 return pickle.load(f)
@@ -293,7 +292,6 @@ class Worker:
                                 self.send_response(response)
 
                 remainder = local_attempts % batch_size
-                print(local_attempts)
                 if remainder:
                     with Worker.attempts_lock:
                         Worker.attempts += remainder

@@ -400,7 +400,7 @@ class Controller:
         self.total_crack_time += data.get('crack_time')
         self.total_return_latency += time.time() - data.get('sent_time')
 
-        print("============================= PASSWORD ==================================")
+        print("\n============================= PASSWORD ==================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
         print(f"Password Found: {data['password']}")
 
@@ -412,7 +412,7 @@ class Controller:
         print(f"Total end-to-end Runtime: {abs(end_runtime)} seconds")
         
         print("============================= HEARTBEAT =================================")
-        print(f"Heartbeats received: {self.heartbeats_received}")
+        print(f"Heartbeats Received: {self.heartbeats_received}")
         print(f"Attempts/Heartbeat: {self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
 
         print("============================= CHECKPOINT ================================")
@@ -420,12 +420,19 @@ class Controller:
         print(f"Checkpoint Latency: {self.checkpoint_latency}")
         print("=========================================================================")
         
+
+        self.end_workers()
+        print("\n\n\n\n\n")
         print(f"{abs(self.controller_parsing_time)}")
         print(f"{abs(self.total_dispatch_latency)}")
         print(f"{abs(self.total_crack_time)}")
         print(f"{abs(self.total_return_latency)}")
         print(f"{abs(end_runtime)}")
-        self.end_workers()
+
+        print(self.heartbeats_received)
+        print(f"{self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
+        print(self.checkpoints_received)
+        print(self.checkpoint_latency)
         self.cleanup(True)
 
     def end_workers(self):
