@@ -31,6 +31,7 @@ class Controller:
         self.outputs = []
         self.message_queues = {}
         self.next_index = 0
+        self.failed_jobs = [] # [(start, end, checkpoint), (), (), ()]
 
         self.workers = {}
 
@@ -90,6 +91,13 @@ class Controller:
             help="Chunk size to send workers"
         )
 
+        parser.add_argument(
+            "-k", "--checkpoint_attempts",
+            type=positive_int,
+            required=True,
+            help="Number of passwords attempts for each checkpoint"
+        )
+
         self.args = parser.parse_args()
  
     def handle_args(self):
@@ -99,6 +107,7 @@ class Controller:
             self.server_port = self.args.port
             self.heartbeat_timeout = self.args.heartbeat_seconds # seconds
             self.chunksize = self.args.chunk_size
+            self.checkpoint_attempts = self.args.checkpoint_attempts
 
         except Exception as e:
             print(e)
@@ -201,18 +210,16 @@ class Controller:
                     self.inputs.append(connection)
                     self.workers[connection] = {
                         "addr": addr,
-                        "registered": True, # Condition to register? not for this assignment..
+                        "registered": True,
                         "last_heartbeat_sent": time.time() - 0.000001,
-                        "last_heartbeat_received": time.time()
+                        "last_heartbeat_received": time.time(),
+                        "assigned_chunk": [0, 0, 0] # (start_index, end_index, last_checkpoint)
                     }
                     print("Worker registered:", addr)
-                    job = self.construct_job()
-                    connection.sendall(job) # send first job
+                    job_order, job_assigned = self.construct_job()
+                    s['assigned_chunk'] = job_assigned
+                    connection.sendall(job_order) # send first job
                 else:
-                    # Existing worker sent data
-                    # CHECK WHAT IS BEING SENT BACk
-                    # HEARTBEAT? UPDATE VALUES
-                    # JOB FINISHED/REQUEST? SEND NEXT JOB
                     data = s.recv(1024)
                     data = pickle.loads(data)
                     print("RECEIVED")
@@ -224,12 +231,15 @@ class Controller:
                             if data.get('type') == "job_finished":
                                 # send a new job
                                 self.handle_performance(data)
-                                job = self.construct_job()
+                                job, assigned_job = self.construct_job()
+                                s["assgined_chunk"] = assigned_job
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
                                 self.heartbeat_response(data, s)
                             elif data.get('type') == "cracked_success":
                                 self.result_response(data)
+                            elif data.get('type') == "checkpoint":
+                                self.handle_checkpoint(data, s)
                         else:
                             # Worker registration, not needed
                             continue
@@ -266,7 +276,11 @@ class Controller:
                 if s in self.workers:
                     del self.workers[s]
                 s.close()
-                
+
+    def handle_checkpoint(self, data, worker):
+        self.workers[worker]["assigned_chunk"][2] = data["checkpoint"]
+        print("===================WORKER INFORMATION:", self.workers[worker]["assigned_chunk"])
+
     def handle_performance(self, data):
         dispatch_latency = data.get('dispatch_latency')
         self.total_dispatch_latency += dispatch_latency
@@ -278,8 +292,17 @@ class Controller:
         self.total_return_latency += time.time() - return_latency
 
     def construct_job(self):
-        start_index = self.next_index
-        end_index = self.next_index + self.chunksize - 1 # 0-999 is 1000 passwords, inclusive end_index is 999
+        if self.failed_jobs:
+            failed_job = self.failed_jobs.pop(0)
+            start_index = failed_job[0]
+            end_index = failed_job[1]
+            curr_checkpoint = failed_job[2]
+        else:
+            start_index = self.next_index
+            end_index = self.next_index + self.chunksize - 1 # 0-999 is 1000 passwords, inclusive end_index is 999
+            curr_checkpoint = start_index
+            self.next_index += self.chunksize # Start at the next password after the chunksize
+
         data = {
             'type': "job",
             'hash_algorithm': self.hash_algorithm,
@@ -288,14 +311,18 @@ class Controller:
             'rounds': getattr(self, 'rounds', None),
             'time_sent': time.time(),
             'start_index': start_index,
-            'end_index': end_index
+            'end_index': end_index,
+            'curr_checkpoint': curr_checkpoint,
+            'checkpoint_interval': self.checkpoint_attempts
         }
-        self.next_index += self.chunksize # Start at the next password after the chunksize
+
+        job_assigned = [start_index, end_index, curr_checkpoint]
         response = pickle.dumps(data)
-        return response
+        return response, job_assigned
     
     def remove_worker(self, ws):
         addr = self.workers[ws]['addr']
+        # TODO HERE
         print(f"[WORKER] Removing worker {addr}")
         if ws in self.inputs:
             self.inputs.remove(ws)

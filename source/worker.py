@@ -8,10 +8,9 @@ import argparse
 import threading
 import queue
 import time
-import ctypes
-import sys
 import faulthandler
 from yescrypt_wrap import verify_yescrypt
+import os
 
 faulthandler.enable()
 
@@ -86,7 +85,9 @@ class Worker:
         hashed_password = decoded_message.get("hashed_password")
         rounds = decoded_message.get("rounds")
         start_index = decoded_message.get("start_index")
+        curr_checkpoint = decoded_message.get("curr_checkpoint")
         end_index = decoded_message.get("end_index")
+        checkpoint_interval = decoded_message.get("checkpoint_interval")
 
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
@@ -97,11 +98,11 @@ class Worker:
 
         self.dispatch_latency = time.time() - decoded_message.get("time_sent")
 
-        chunk_size = end_index - start_index + 1
+        chunk_size = end_index - curr_checkpoint + 1
         thread_chunk = max(1, chunk_size // self.thread_count)
 
         for i in range(self.thread_count):
-            thread_start = start_index + i * thread_chunk
+            thread_start = curr_checkpoint + i * thread_chunk
             if thread_start > end_index:
                 break
 
@@ -110,16 +111,17 @@ class Worker:
             else:
                 thread_end = min(end_index, thread_start + thread_chunk - 1)
 
-            self.job_queue.put((algorithm, full_hash, thread_start, thread_end))
+            self.job_queue.put((algorithm, full_hash, thread_start, thread_end, checkpoint_interval, start_index))
             print(f"[JOB SPLIT] thread={i} range=({thread_start}, {thread_end})")
 
-    def create_response(self, msg_type):
+    def create_response(self, msg_type, checkpoint=0):
         return {
             "type": msg_type,
             "password": Worker.found_password,
             "crack_time": self.total_crack_time,
             "dispatch_latency": self.dispatch_latency,
-            "sent_time": time.time()
+            "sent_time": time.time(),
+            "checkpoint": checkpoint
         }
 
     def create_args(self):
@@ -221,10 +223,27 @@ class Worker:
 
         return "".join(reversed(chars))
 
+    @staticmethod
+    def store_job_info(job_info, filename="checkpoint.bin"):
+        with open(filename, "wb") as f:
+            pickle.dump(job_info, f)
+
+    @staticmethod
+    def load_job_info(filename="checkpoint.bin"):
+        if os.path.exists(filename):
+            with open(filename, "rb") as f:
+                return pickle.load(f)
+        return []
+    
     def crack_worker(self):
         while not Worker.shutdown_event.is_set():
             try:
-                algorithm, full_hash, start_index, end_index = self.job_queue.get(timeout=0.5)
+                algorithm, full_hash, start_index, end_index, checkpoint_interval, chunk_start = self.job_queue.get(timeout=0.5)
+                last_job = self.load_job_info()
+                if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
+                    start_index = last_job[5]
+                else:
+                    self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval])
             except queue.Empty:
                 continue
 
@@ -235,7 +254,7 @@ class Worker:
 
             start_crack_time = time.time()
             local_attempts = 0
-            batch_size = 200
+            batch_size = 50
 
             try:
                 for current_index in range(start_index, end_index + 1):
@@ -259,6 +278,10 @@ class Worker:
                 if remainder:
                     with Worker.attempts_lock:
                         Worker.attempts += remainder
+                        if Worker.attempts % checkpoint_interval == 0:
+                            print("SEND")
+                            response = self.create_response("checkpoint", Worker.attempts)
+                            self.send_response(response)
 
             finally:
                 elapsed = time.time() - start_crack_time
