@@ -89,6 +89,16 @@ class Worker:
         end_index = decoded_message.get("end_index")
         checkpoint_interval = decoded_message.get("checkpoint_interval")
 
+        last_job = self.load_job_info()
+        if [algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval] == last_job[:7]:
+            print("[RESTORED] Resuming from local checkpoint")
+            curr_checkpoint = last_job[7]
+            
+        else:
+            self.store_job_info([algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval, curr_checkpoint])
+        Worker.attempts = curr_checkpoint - start_index
+        Worker.last_attempt = curr_checkpoint - start_index
+
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
         elif algorithm in ["1", "5", "6", "y"]:
@@ -240,14 +250,6 @@ class Worker:
         while not Worker.shutdown_event.is_set():
             try:
                 algorithm, full_hash, start_index, end_index, checkpoint_interval, chunk_start = self.job_queue.get(timeout=0.5)
-                Worker.attempts = start_index - chunk_start
-
-                last_job = self.load_job_info()
-                if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
-                    print("[RESTORED] Resuming from local checkpoint")
-                    start_index = last_job[5]
-                else:
-                    self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval, start_index])
                 
             except queue.Empty:
                 continue
