@@ -213,7 +213,7 @@ class Controller:
                         "registered": True,
                         "last_heartbeat_sent": time.time() - 0.000001,
                         "last_heartbeat_received": time.time(),
-                        "assigned_chunk": [0, 0, 0] # (start_index, end_index, last_checkpoint)
+                        "assigned_chunk": (0, 0, 0) # (start_index, end_index, last_checkpoint)
                     }
                     print("Worker registered:", addr)
                     job_order, job_assigned = self.construct_job()
@@ -282,8 +282,11 @@ class Controller:
                 s.close()
 
     def handle_checkpoint(self, data, worker):
+        start = data["start_index"]
+        end = data["end_index"]
+        checkpoint = data["checkpoint"]
 
-        self.workers[worker]["assigned_chunk"][2] = data["checkpoint"]
+        self.workers[worker]["assigned_chunk"] = (start, end, checkpoint)
         print("[Worker Checkpoint]:", self.workers[worker]["assigned_chunk"])
 
     def handle_performance(self, data):

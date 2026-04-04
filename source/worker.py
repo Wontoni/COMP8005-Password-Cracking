@@ -22,6 +22,8 @@ class Worker:
     attempts = 0
     last_attempt = 0
     checkpoint = 0
+    current_start = 0
+    current_end = 0
     attempts_lock = threading.Lock()
     jobs_lock = threading.Lock()
     found_event = threading.Event()
@@ -98,6 +100,8 @@ class Worker:
         else:
             self.store_job_info([algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval, curr_checkpoint])
         Worker.checkpoint = curr_checkpoint
+        Worker.start = start_index
+        Worker.end = end_index
 
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
@@ -285,7 +289,7 @@ class Worker:
                             Worker.checkpoint += batch_size
                             if Worker.checkpoint % checkpoint_interval == 0:
                                 print("[CHECKPOINT] Sending checkpoint to controller", Worker.checkpoint)
-                                response = self.create_response("checkpoint", Worker.checkpoint, chunk_start, end_index)
+                                response = self.create_response("checkpoint", Worker.checkpoint, Worker.current_start, Worker.current_end)
                                 self.send_response(response)
 
                 remainder = local_attempts % batch_size
