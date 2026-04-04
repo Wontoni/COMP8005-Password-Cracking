@@ -413,7 +413,10 @@ class Controller:
         
         print("============================= HEARTBEAT =================================")
         print(f"Heartbeats Received: {self.heartbeats_received}")
-        print(f"Attempts/Heartbeat: {self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
+        if self.heartbeats_received == 0:
+            print(f"Attempts/Heartbeat: 0")
+        else:
+            print(f"Attempts/Heartbeat: {self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
 
         print("============================= CHECKPOINT ================================")
         print(f"Checkpoints Received: {self.checkpoints_received}")
@@ -430,7 +433,10 @@ class Controller:
         print(f"{abs(end_runtime)}")
 
         print(self.heartbeats_received)
-        print(f"{self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
+        if self.heartbeats_received == 0:
+            print(0)
+        else:
+            print(f"{self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
         print(self.checkpoints_received)
         print(self.checkpoint_latency)
         self.cleanup(True)
