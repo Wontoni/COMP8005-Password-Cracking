@@ -102,6 +102,9 @@ class Worker:
         Worker.checkpoint = curr_checkpoint
         Worker.current_start = start_index
         Worker.current_end = end_index
+        print("RHAJKSDHAJKSDBZHIXCHJBKZIOCHVj<bkXCLL========================")
+        print(Worker.current_start)
+        print(Worker.current_end)
 
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
