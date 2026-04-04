@@ -110,7 +110,7 @@ class Worker:
 
         chunk_size = end_index - curr_checkpoint + 1
         thread_chunk = max(1, chunk_size // self.thread_count)
-
+        print("[CHECKPOINT] Starting from",curr_checkpoint)
         for i in range(self.thread_count):
             thread_start = curr_checkpoint + i * thread_chunk
             if thread_start > end_index:
@@ -281,7 +281,7 @@ class Worker:
                         with Worker.attempts_lock:
                             Worker.attempts += batch_size
                             if Worker.attempts % checkpoint_interval == 0:
-                                print("[CHECKPOINT] Sending checkpoint to controller")
+                                print("[CHECKPOINT] Sending checkpoint to controller", Worker.attempts)
                                 response = self.create_response("checkpoint", Worker.attempts)
                                 self.send_response(response)
 
