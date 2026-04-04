@@ -281,7 +281,7 @@ class Worker:
                         with Worker.attempts_lock:
                             Worker.attempts += batch_size
                             if Worker.attempts % checkpoint_interval == 0:
-                                print("SEND")
+                                print("[CHECKPOINT] Sending checkpoint to controller")
                                 response = self.create_response("checkpoint", Worker.attempts)
                                 self.send_response(response)
 

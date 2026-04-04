@@ -295,6 +295,7 @@ class Controller:
 
     def construct_job(self):
         if self.failed_jobs:
+            print("[JOB] Sending failed job")
             failed_job = self.failed_jobs.pop(0)
             start_index = failed_job[0]
             end_index = failed_job[1]
@@ -324,8 +325,8 @@ class Controller:
     
     def remove_worker(self, ws):
         addr = self.workers[ws]['addr']
-        # TODO HERE
         failed_job = self.workers[ws]["assigned_chunk"]
+        print("[JOB] Saving failed job", failed_job)
         self.failed_jobs.append(failed_job)
 
         print(f"[WORKER] Removing worker {addr}")
