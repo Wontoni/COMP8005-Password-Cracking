@@ -187,7 +187,8 @@ class Controller:
             readable, writable, exceptional = select.select(
                 self.inputs,
                 self.outputs,
-                self.inputs
+                self.inputs,
+                1.0
             )
 
             for s in readable:
@@ -201,7 +202,7 @@ class Controller:
                     self.workers[connection] = {
                         "addr": addr,
                         "registered": True, # Condition to register? not for this assignment..
-                        "last_heartbeat_sent": time.time(),
+                        "last_heartbeat_sent": time.time() - 0.000001,
                         "last_heartbeat_received": time.time()
                     }
                     print("Worker registered:", addr)
@@ -238,23 +239,26 @@ class Controller:
                         del self.workers[s]
                         s.close()
 
-                    # Heartbeat
-                    now = time.time()
-                    for ws, wdata in list(self.workers.items()):
-                        if not wdata['registered']:
-                            continue
+            # Heartbeat
+            now = time.time()
+            for ws, wdata in list(self.workers.items()):
+                if not wdata['registered']:
+                    continue
 
-                        if wdata['last_heartbeat_received'] > wdata['last_heartbeat_sent']:
-                            if now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout: # send every x (heartbeat_timeout) seconds
-                                try:
-                                    self.request_heartbeat(ws)
-                                    wdata['last_heartbeat_sent'] = now
-                                except Exception as e:
-                                    print(f"[HEARTBEAT] Error sending heartbeat to {wdata['addr']}: {e}")
-                                    self.remove_worker(ws)
-                        elif now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout:
-                            print(f"[HEARTBEAT] Worker timing out: {wdata['addr']}")
+                if wdata['last_heartbeat_received'] > wdata['last_heartbeat_sent']:
+                    if now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout: # send every x (heartbeat_timeout) seconds
+                        try:
+                            self.request_heartbeat(ws)
+                            wdata['last_heartbeat_sent'] = now
+                        except Exception as e:
+                            print(f"[HEARTBEAT] Error sending heartbeat to {wdata['addr']}: {e}")
                             self.remove_worker(ws)
+                elif now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout:
+                    print(now)
+                    print(wdata['last_heartbeat_sent'])
+                    print(self.heartbeat_timeout)
+                    print(f"[HEARTBEAT] Worker timing out: {wdata['addr']}")
+                    self.remove_worker(ws)
 
 
             for s in exceptional:
@@ -262,6 +266,7 @@ class Controller:
                 if s in self.workers:
                     del self.workers[s]
                 s.close()
+                
     def handle_performance(self, data):
         dispatch_latency = data.get('dispatch_latency')
         self.total_dispatch_latency += dispatch_latency
@@ -361,8 +366,19 @@ class Controller:
         print(f"{abs(self.total_crack_time)}")
         print(f"{abs(self.total_return_latency)}")
         print(f"{abs(end_runtime)}")
+        self.end_workers()
         self.cleanup(True)
 
+    def end_workers(self):
+        for ws in list(self.workers.keys()):
+            try:
+                msg = {"type": "end"}
+                print("Sending end signal to worker", self.workers[ws]['addr'])
+                ws.sendall(pickle.dumps(msg))
+                ws.close()
+            except Exception:
+                pass
+        
     def heartbeat_response(self, data, ws):
         print(f"[HEARTBEAT] Response received, {data['delta_attempts']} attempts tried since last heartbeat.")
         self.workers[ws]["last_heartbeat_received"] = time.time()
