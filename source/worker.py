@@ -230,6 +230,7 @@ class Worker:
 
     @staticmethod
     def load_job_info(filename="checkpoint.bin"):
+        print(os.path.exists(filename))
         if os.path.exists(filename):
             with open(filename, "rb") as f:
                 return pickle.load(f)

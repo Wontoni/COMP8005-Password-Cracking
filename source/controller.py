@@ -234,7 +234,7 @@ class Controller:
                                 # send a new job
                                 self.handle_performance(data)
                                 job, assigned_job = self.construct_job()
-                                s["assgined_chunk"] = assigned_job
+                                self.workers[s]["assgined_chunk"] = assigned_job
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
                                 self.heartbeat_response(data, s)
@@ -413,7 +413,7 @@ class Controller:
                 pass
         
     def heartbeat_response(self, data, ws):
-        print(f"[HEARTBEAT] Response received, {data['delta_attempts']} attempts tried since last heartbeat.")
+        print(f"[HEARTBEAT] Response received, {abs(data['delta_attempts'])} attempts tried since last heartbeat.")
         self.workers[ws]["last_heartbeat_received"] = time.time()
 
     def handle_error(self, err_message):
