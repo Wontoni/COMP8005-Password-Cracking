@@ -33,11 +33,16 @@ class Controller:
         self.next_index = 0
         self.failed_jobs = [] # [(start, end, checkpoint), (), (), ()]
 
+        self.heartbeats_received = 0
+        self.heartbeat_attempts_received = 0
+        self.checkpoints_received = 0
+
         self.workers = {}
 
         self.total_dispatch_latency = 0
         self.total_crack_time = 0
         self.total_return_latency = 0
+        self.checkpoint_latency = 0
 
         self.start_time = time.time()
         self.shadow_file_contents = self.check_shadow_file(self.shadow_file)
@@ -288,6 +293,10 @@ class Controller:
 
         self.workers[worker]["assigned_chunk"] = (start, end, checkpoint)
         print("[Worker Checkpoint]:", self.workers[worker]["assigned_chunk"])
+        self.checkpoints_received += 1
+
+        return_latency = data.get('sent_time')
+        self.checkpoint_latency += time.time() - return_latency
 
     def handle_performance(self, data):
         dispatch_latency = data.get('dispatch_latency')
@@ -391,15 +400,25 @@ class Controller:
         self.total_crack_time += data.get('crack_time')
         self.total_return_latency += time.time() - data.get('sent_time')
 
-        print("=============================================================")
+        print("============================= PASSWORD ==================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
         print(f"Password Found: {data['password']}")
+
+        print("============================= LATENCY ===================================")
         print(f"Controller Parsing Time: {abs(self.controller_parsing_time)} seconds")
         print(f"Dispatch Latency: {abs(self.total_dispatch_latency)} seconds")
         print(f"Cracking Time: {abs(self.total_crack_time)} seconds")
         print(f"Return Latency: {abs(self.total_return_latency)} seconds")
         print(f"Total end-to-end Runtime: {abs(end_runtime)} seconds")
-        print("=============================================================")
+        
+        print("============================= HEARTBEAT =================================")
+        print(f"Heartbeats received: {self.heartbeats_received}")
+        print(f"Attempts/Heartbeat: {self.heartbeat_attempts_received/self.heartbeats_received:.2f}")
+
+        print("============================= CHECKPOINT ================================")
+        print(f"Checkpoints Received: {self.checkpoints_received}")
+        print(f"Checkpoint Latency: {self.checkpoint_latency}")
+        print("=========================================================================")
         
         print(f"{abs(self.controller_parsing_time)}")
         print(f"{abs(self.total_dispatch_latency)}")
@@ -421,6 +440,8 @@ class Controller:
         
     def heartbeat_response(self, data, ws):
         print(f"[HEARTBEAT] Response received, {abs(data['delta_attempts'])} attempts tried since last heartbeat.")
+        self.heartbeats_received += 1
+        self.heartbeat_attempts_received += abs(data['delta_attempts'])
         self.workers[ws]["last_heartbeat_received"] = time.time()
 
     def handle_error(self, err_message):
