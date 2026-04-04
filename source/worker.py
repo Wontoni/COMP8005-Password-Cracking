@@ -243,7 +243,7 @@ class Worker:
                 if [algorithm, full_hash, chunk_start, end_index, checkpoint_interval] == last_job[:5]:
                     start_index = last_job[5]
                 else:
-                    self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval])
+                    self.store_job_info([algorithm, full_hash, chunk_start, end_index, checkpoint_interval, start_index])
             except queue.Empty:
                 continue
 
@@ -275,6 +275,7 @@ class Worker:
                             Worker.attempts += batch_size
 
                 remainder = local_attempts % batch_size
+                print(local_attempts)
                 if remainder:
                     with Worker.attempts_lock:
                         Worker.attempts += remainder
