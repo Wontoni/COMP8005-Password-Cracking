@@ -229,8 +229,6 @@ class Controller:
                     if not data:
                         continue
                     data = pickle.loads(data)
-                    print("RECEIVED")
-                    print(data)
 
                     if data:
                         if self.workers[s]["registered"]:
@@ -240,7 +238,6 @@ class Controller:
                                 self.handle_performance(data)
                                 job, assigned_job = self.construct_job()
                                 print("[ASSIGN] Assigning job", assigned_job)
-                                print(s)
                                 self.workers[s]["assgined_chunk"] = assigned_job
                                 s.sendall(job)
                             elif data.get('type') == "heartbeat":
@@ -253,7 +250,6 @@ class Controller:
                             # Worker registration, not needed
                             continue
                     else:
-                        print("Worker disconnected FIX SOMETHING HERE RAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
                         self.inputs.remove(s)
                         del self.workers[s]
                         s.close()
@@ -273,9 +269,6 @@ class Controller:
                             print(f"[HEARTBEAT] Error sending heartbeat to {wdata['addr']}: {e}")
                             self.remove_worker(ws)
                 elif now - wdata['last_heartbeat_sent'] > self.heartbeat_timeout:
-                    print(now)
-                    print(wdata['last_heartbeat_sent'])
-                    print(self.heartbeat_timeout)
                     print(f"[HEARTBEAT] Worker timing out: {wdata['addr']}")
                     self.remove_worker(ws)
 
@@ -296,7 +289,7 @@ class Controller:
         self.checkpoints_received += 1
 
         return_latency = data.get('sent_time')
-        self.checkpoint_latency += time.time() - return_latency
+        self.checkpoint_latency += abs(time.time() - return_latency)
 
     def handle_performance(self, data):
         dispatch_latency = data.get('dispatch_latency')
@@ -306,7 +299,7 @@ class Controller:
         self.total_crack_time += crack_time
 
         return_latency = data.get('sent_time')
-        self.total_return_latency += time.time() - return_latency
+        self.total_return_latency += abs(time.time() - return_latency)
 
     def construct_job(self):
         if self.failed_jobs:
