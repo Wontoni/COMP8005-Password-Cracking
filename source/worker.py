@@ -91,6 +91,8 @@ class Worker:
         curr_checkpoint = decoded_message.get("curr_checkpoint")
         end_index = decoded_message.get("end_index")
         checkpoint_interval = decoded_message.get("checkpoint_interval")
+        self.job_start_time = time.time()
+        self.total_crack_time = 0
 
         last_job = self.load_job_info()
         if [algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval] == last_job[:7]:
@@ -277,8 +279,6 @@ class Worker:
                     local_attempts += 1
 
                     if self.check_password(candidate, algorithm, full_hash):
-                        elapsed = time.time() - start_crack_time
-                        self.total_crack_time += elapsed
                         self.report_success(candidate, local_attempts)
                         
 
@@ -297,8 +297,6 @@ class Worker:
                         Worker.attempts += remainder
 
             finally:
-                elapsed = time.time() - start_crack_time
-                self.total_crack_time += elapsed
 
                 with Worker.active_jobs_lock:
                     Worker.active_jobs -= 1
@@ -336,7 +334,7 @@ class Worker:
 
         Worker.found_password = password
         Worker.found_event.set()
-
+        self.total_crack_time = time.time() - self.job_start_time
         print(f"[FOUND] Password: {password}")
         print(f"Total attempts: {Worker.attempts + local_attempts}")
 
@@ -381,6 +379,7 @@ class Worker:
                 break
 
     def request_job(self):
+        self.total_crack_time = time.time() - self.job_start_time
         response = self.create_response("job_finished")
         self.send_response(response)
 

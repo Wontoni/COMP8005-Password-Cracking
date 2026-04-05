@@ -398,7 +398,7 @@ class Controller:
         end_runtime = time.time() - self.start_time
         self.total_dispatch_latency += data.get('dispatch_latency')
         self.total_crack_time += data.get('crack_time')
-        self.total_return_latency += time.time() - data.get('sent_time')
+        self.total_return_latency += abs(time.time() - data.get('sent_time'))
 
         print("\n============================= PASSWORD ==================================")
         print(f"Hash Algorithm: {Controller.ALGORITHMS[self.hash_algorithm]}")
