@@ -300,7 +300,7 @@ class Worker:
                             if Worker.checkpoint % checkpoint_interval == 0:
                                 print("[CHECKPOINT] Sending checkpoint to controller", Worker.checkpoint)
                                 response = self.create_response("checkpoint", Worker.checkpoint, Worker.current_start, Worker.current_end)
-                                self.store_job_info([algorithm, Worker.salt, Worker.hashes, Worker.rounds, start_index, end_index, checkpoint_interval, Worker.curr_checkpoint])
+                                self.store_job_info([algorithm, Worker.salt, Worker.hashes, Worker.rounds, start_index, end_index, checkpoint_interval, Worker.checkpoint])
                                 self.send_response(response)
 
 
