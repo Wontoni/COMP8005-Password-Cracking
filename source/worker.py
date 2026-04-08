@@ -100,8 +100,9 @@ class Worker:
 
         last_job = self.load_job_info()
         if [algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval] == last_job[:7]:
-            print("[RESTORED] Resuming from local checkpoint")
+            print("[RESTORED] Resuming from local checkpoint", last_job[7])
             curr_checkpoint = last_job[7]
+            print(curr_checkpoint)
             
         else:
             self.store_job_info([algorithm, salt, hashed_password, rounds, start_index, end_index, checkpoint_interval, curr_checkpoint])
@@ -295,8 +296,6 @@ class Worker:
                                 response = self.create_response("checkpoint", Worker.checkpoint, Worker.current_start, Worker.current_end)
                                 self.send_response(response)
 
-                                if Worker.checkpoint > Worker.current_end:
-                                    self.request_job()
 
 
                 remainder = local_attempts % batch_size
