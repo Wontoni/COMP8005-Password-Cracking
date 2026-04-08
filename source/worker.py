@@ -90,6 +90,10 @@ class Worker:
         start_index = decoded_message.get("start_index")
         curr_checkpoint = decoded_message.get("curr_checkpoint")
         end_index = decoded_message.get("end_index")
+        if curr_checkpoint > end_index:
+            self.request_job()
+            return
+
         checkpoint_interval = decoded_message.get("checkpoint_interval")
         self.job_start_time = time.time()
         self.total_crack_time = 0
