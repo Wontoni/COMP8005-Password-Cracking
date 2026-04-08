@@ -295,6 +295,10 @@ class Worker:
                                 response = self.create_response("checkpoint", Worker.checkpoint, Worker.current_start, Worker.current_end)
                                 self.send_response(response)
 
+                                if Worker.checkpoint > Worker.current_end:
+                                    self.request_job()
+
+
                 remainder = local_attempts % batch_size
                 if remainder:
                     with Worker.attempts_lock:
