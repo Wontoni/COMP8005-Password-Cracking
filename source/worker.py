@@ -33,6 +33,9 @@ class Worker:
     active_jobs = 0
     active_jobs_lock = threading.Lock()
     yescrypt_lock = threading.Lock()
+    salt = ""
+    hashes = ""
+    rounds = ""
 
     LEGAL_CHARACTERS = (
         string.ascii_lowercase +
@@ -109,6 +112,9 @@ class Worker:
         Worker.checkpoint = curr_checkpoint
         Worker.current_start = start_index
         Worker.current_end = end_index
+        Worker.salt = salt
+        Worker.hashes = hashed_password
+        Worker.rounds = rounds
 
         if algorithm == "2b":
             full_hash = f"$2b${str(rounds).zfill(2)}${salt}{hashed_password}"
@@ -294,6 +300,7 @@ class Worker:
                             if Worker.checkpoint % checkpoint_interval == 0:
                                 print("[CHECKPOINT] Sending checkpoint to controller", Worker.checkpoint)
                                 response = self.create_response("checkpoint", Worker.checkpoint, Worker.current_start, Worker.current_end)
+                                self.store_job_info([algorithm, Worker.salt, Worker.hashes, Worker.rounds, start_index, end_index, checkpoint_interval, Worker.curr_checkpoint])
                                 self.send_response(response)
 
 
